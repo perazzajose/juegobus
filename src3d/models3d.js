@@ -149,16 +149,34 @@ const Models3D = (() => {
   // "módulo" de BAY × FLOOR metros; las piezas lisas (marquesinas, carteles, balcones) leen la
   // esquina de la textura, que es pared blanca.
   const BAY = 3, FLOOR = 3;
-  let facadeTex = null;
-  function windowTexture() {
+  // La textura tiene 4 × 4 ventanas (256 px, potencia de 2: repite bien también en WebGL 1).
+  // De noche, `lit` marca qué ventanas tienen la luz prendida (mapa de emisión, cálido y variado).
+  const CELLS = 4;
+  let facadeTex = null, litTex = null;
+  function windowTexture(lit) {
     const c = document.createElement('canvas');
-    c.width = c.height = 64;                          // potencia de 2: repite bien también en WebGL 1
+    c.width = c.height = 64 * CELLS;
     const g = c.getContext('2d');
-    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 64);
-    g.fillStyle = '#d9d4cc'; g.fillRect(14, 50, 36, 4); // alféizar
-    g.fillStyle = '#2b3946'; g.fillRect(18, 18, 28, 32); // vidrio
-    g.fillStyle = '#5d7488'; g.fillRect(18, 18, 28, 9);  // reflejo del cielo
-    g.fillStyle = '#e8e4dc'; g.fillRect(31, 18, 2, 32);  // parante
+    g.fillStyle = lit ? '#000000' : '#ffffff';
+    g.fillRect(0, 0, c.width, c.height);
+    let seed = 3;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    for (let i = 0; i < CELLS; i++) for (let j = 0; j < CELLS; j++) {
+      const x = i * 64, y = j * 64;
+      if (lit) {
+        const r = rnd();
+        if (r < 0.45) continue;                       // apagada
+        g.fillStyle = r < 0.6 ? '#9fb7ff' : r < 0.8 ? '#ffd27a' : '#ffb85c';   // tele (azulada) o lámpara
+        g.fillRect(x + 18, y + 18, 28, 32);
+        g.fillStyle = 'rgba(0,0,0,0.5)';
+        g.fillRect(x + 31, y + 18, 2, 32);
+        continue;
+      }
+      g.fillStyle = '#d9d4cc'; g.fillRect(x + 14, y + 50, 36, 4); // alféizar
+      g.fillStyle = '#2b3946'; g.fillRect(x + 18, y + 18, 28, 32); // vidrio
+      g.fillStyle = '#5d7488'; g.fillRect(x + 18, y + 18, 28, 9);  // reflejo del cielo
+      g.fillStyle = '#e8e4dc'; g.fillRect(x + 31, y + 18, 2, 32);  // parante
+    }
     const t = new THREE.CanvasTexture(c);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.colorSpace = THREE.SRGBColorSpace;
@@ -176,7 +194,7 @@ const Models3D = (() => {
         pos.push(p[0], p[1], p[2]); nrm.push(n[0], n[1], n[2]); uv.push(t[0], t[1]); col.push(tmp.r, tmp.g, tmp.b);
       });
     };
-    const FLAT = [[0.04, 0.04], [0.04, 0.04], [0.04, 0.04], [0.04, 0.04]];
+    const FLAT = [[0.03, 0.03], [0.03, 0.03], [0.03, 0.03], [0.03, 0.03]];
     // Caja lisa con centro en x/z y base en y. noBottom: sin la cara de abajo (no se ve nunca).
     function box(w, h, d, x, y, z, color) {
       const a = x - w / 2, b = x + w / 2, y0 = y, y1 = y + h, f = z + d / 2, k = z - d / 2;
@@ -189,8 +207,8 @@ const Models3D = (() => {
     // Paredes con ventanas (4 lados), de y a y + floors pisos. sides: qué lados llevan ventanas.
     function facade(w, d, x, y, z, floors, color, sides = { f: 1, b: 1, l: 1, r: 1 }) {
       const a = x - w / 2, b = x + w / 2, y0 = y, y1 = y + floors * FLOOR, f = z + d / 2, k = z - d / 2;
-      const uw = (len, on) => (on ? Math.max(1, Math.round(len / BAY)) : 0.04);
-      const vv = on => (on ? floors : 0.04);
+      const uw = (len, on) => (on ? Math.max(1, Math.round(len / BAY)) / CELLS : 0.03);
+      const vv = on => (on ? floors / CELLS : 0.03);
       const U = (len, on) => { const u = uw(len, on), v = vv(on); return on ? [[0, 0], [u, 0], [u, v], [0, v]] : FLAT; };
       quad([a, y0, f], [b, y0, f], [b, y1, f], [a, y1, f], [0, 0, 1], U(w, sides.f), color);
       quad([b, y0, k], [a, y0, k], [a, y1, k], [b, y1, k], [0, 0, -1], U(w, sides.b), color);
@@ -221,8 +239,12 @@ const Models3D = (() => {
   }
 
   function makeBuildings() {
-    facadeTex = facadeTex || windowTexture();
-    const mat = new THREE.MeshStandardMaterial({ map: facadeTex, vertexColors: true, roughness: 0.9, metalness: 0 });
+    facadeTex = facadeTex || windowTexture(false);
+    litTex = litTex || windowTexture(true);
+    const mat = new THREE.MeshStandardMaterial({
+      map: facadeTex, vertexColors: true, roughness: 0.9, metalness: 0,
+      emissive: 0xffffff, emissiveMap: litTex, emissiveIntensity: 1.4      // ventanas con luz (es de noche)
+    });
     const add = (key, fn) => {
       const B = geoBuilder();
       fn(B);

@@ -71,7 +71,9 @@ const World3D = (() => {
     blobby: new THREE.IcosahedronGeometry(1, 1),
     cone: new THREE.ConeGeometry(1, 1, 8),
     person: new THREE.CylinderGeometry(0.2, 0.24, 1.1, 8),
-    head: new THREE.SphereGeometry(0.15, 10, 8)
+    head: new THREE.SphereGeometry(0.15, 10, 8),
+    halo: new THREE.PlaneGeometry(1, 1),                               // mira a +Z (hacia la cámara)
+    pool: new THREE.PlaneGeometry(1, 1, 1, 3).rotateX(-Math.PI / 2)    // mancha de luz en el piso
   };
 
   // Sombra falsa (para calidades sin sombras reales).
@@ -445,7 +447,10 @@ const World3D = (() => {
       // Columna de alumbrado en el cantero, con brazos hacia las dos calzadas.
       return [
         { geo: G.box, mat: galv, offs: [[0, 5, 0, 0.2, 10, 0.2], [0, 10, 0, 4.6, 0.12, 0.14]] },
-        { geo: G.box, mat: std(0xe9edf0, 0.3, 0.2, { emissive: 0x333322 }), offs: [[-2.3, 9.9, 0, 0.7, 0.18, 0.35], [2.3, 9.9, 0, 0.7, 0.18, 0.35]] }
+        { geo: G.box, mat: std(0xfff4dc, 0.3, 0.2, { emissive: 0xffd9a0, emissiveIntensity: 2.2 }), offs: [[-2.3, 9.9, 0, 0.7, 0.18, 0.35], [2.3, 9.9, 0, 0.7, 0.18, 0.35]] },
+        // De noche: resplandor de la lámpara y mancha de luz sobre el asfalto (aditivas, sin luces reales).
+        { geo: G.halo, mat: Ambiente.LAMP_MAT, offs: [[-2.3, 9.75, 0.2, 2.6, 2.6, 1], [2.3, 9.75, 0.2, 2.6, 2.6, 1]] },
+        { geo: G.pool, mat: Ambiente.POOL_MAT, offs: [[-3.3, 0.05, 0, 13, 1, 15], [2.8, 0.05, 0, 9, 1, 12]] }
       ];
     }
     // Alambrado de campo: poste de madera y tres hilos de 10 m.
@@ -798,6 +803,109 @@ const World3D = (() => {
     return g;
   }
 
+  // ---------- Estación de servicio (desvío chico a la derecha) ----------
+  // Un ramal de asfalto que sale de la banquina derecha, corre paralelo a la ruta con las bombas a la
+  // derecha del ómnibus y vuelve a entrar. El frente de la ruta queda hacia -Z; el ómnibus llega desde +Z.
+  // Todo con vértices a lo largo cada pocos metros: se curva con la ruta (bend3d.js).
+  // STATION: carril del desvío (x), largo con ancho completo (±FULL) y de las rampas (hasta ±END).
+  const STATION = { laneX: 9.8, FULL: 52, END: 92, outX: 13.6, pumpX: 12.6, pumpHalf: 9 };
+  function stationOuter(z) {
+    const a = Math.abs(z);
+    if (a <= STATION.FULL) return STATION.outX;
+    const k = Math.min(1, (a - STATION.FULL) / (STATION.END - STATION.FULL));
+    return STATION.outX + (5.15 - STATION.outX) * k * k * (3 - 2 * k);    // rampa suave
+  }
+  function stationStrip(xIn, xOutFn, y, step = 4) {
+    const pos = [], idx = [];
+    let n = 0;
+    for (let z = -STATION.END; z <= STATION.END + 0.01; z += step, n++) {
+      pos.push(xIn(z), y, z, xOutFn(z), y, z);
+      if (n) { const a = (n - 1) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    return geo;
+  }
+  const stationSignTex = () => textTex('ESTACIÓN DE SERVICIO', { w: 1024, h: 96, bg: '#0f6b4f', color: '#ffffff', font: 'bold 64px Arial' });
+  function makeStation() {
+    const g = new THREE.Group();
+    const { laneX, FULL, outX, pumpX, pumpHalf } = STATION;
+    // Asfalto del desvío y línea blanca del borde de afuera.
+    const lane = new THREE.Mesh(stationStrip(() => 5.15, stationOuter, 0.02), std(0x3b3c3f, 0.95));
+    lane.receiveShadow = true;
+    g.add(lane);
+    const edge = new THREE.Mesh(stationStrip((z) => stationOuter(z) - 0.45, (z) => stationOuter(z) - 0.3, 0.03), std(0xeeeeea, 0.6));
+    g.add(edge);
+    // Isla de pasto con cordón entre la ruta y el desvío.
+    const islandGeo = new THREE.BoxGeometry(1, 1, 1, 1, 1, 14);
+    const island = new THREE.Mesh(islandGeo, std(0x3f6229, 0.95));
+    island.scale.set(1.9, 0.18, FULL * 2 - 22);
+    island.position.set(6.55, 0.09, 0);
+    g.add(island);
+    const curb = new THREE.Mesh(islandGeo, std(0xd9d6cc, 0.8));
+    curb.scale.set(2.1, 0.12, FULL * 2 - 21.6);
+    curb.position.set(6.55, 0.06, 0);
+    g.add(curb);
+    // Zona de carga pintada junto a las bombas.
+    const zone = new THREE.Mesh(new THREE.PlaneGeometry(3.4, pumpHalf * 2, 1, 4), pumpZoneMat);
+    zone.rotation.x = -Math.PI / 2;
+    zone.position.set(laneX, 0.035, 0);
+    zone.renderOrder = 2;
+    g.add(zone);
+    // Isla de las bombas (a la derecha del ómnibus) y dos surtidores.
+    g.add(boxMesh(std(0xcfcac0, 0.9), 1.2, 0.25, pumpHalf * 2 - 2, pumpX, 0.125, 0));
+    [-3.6, 3.6].forEach((z) => {
+      g.add(boxMesh(std(0xf2f2f0, 0.5), 0.8, 1.9, 1.1, pumpX, 1.2, z));
+      g.add(boxMesh(std(0x0f6b4f, 0.5), 0.82, 0.35, 1.12, pumpX, 1.95, z));
+      g.add(boxMesh(std(0x111111, 0.3, 0, { emissive: 0x7fffb0, emissiveIntensity: 0.8 }), 0.05, 0.3, 0.6, pumpX - 0.42, 1.45, z));
+    });
+    // Techo (marquesina) sobre el carril y las bombas, con luces abajo.
+    const steel = std(0xe8e8e6, 0.5, 0.3);
+    [-6.5, 6.5].forEach((z) => g.add(boxMesh(steel, 0.45, 5.6, 0.45, pumpX, 2.8, z)));
+    g.add(boxMesh(std(0xf4f4f2, 0.6), 9.5, 0.55, 17, (laneX + pumpX) / 2 + 0.6, 5.85, 0));
+    g.add(boxMesh(std(0x0f6b4f, 0.5), 9.55, 0.32, 17.05, (laneX + pumpX) / 2 + 0.6, 5.6, 0));
+    g.add(boxMesh(std(0xffffff, 0.3, 0, { emissive: 0xffffff, emissiveIntensity: 2.5 }), 6, 0.05, 12, (laneX + pumpX) / 2 + 0.6, 5.42, 0));
+    const fascia = new THREE.Mesh(new THREE.PlaneGeometry(9, 0.75), new THREE.MeshStandardMaterial({ map: stationSignTex(), roughness: 0.5, emissive: 0xffffff, emissiveIntensity: 0.35 }));
+    fascia.material.emissiveMap = fascia.material.map;
+    fascia.position.set((laneX + pumpX) / 2 + 0.6, 5.85, 8.56);   // mira al ómnibus que llega
+    fascia.userData.ownTex = true;
+    g.add(fascia);
+    const pool = new THREE.Mesh(G.pool, Ambiente.POOL_MAT);
+    pool.scale.set(16, 1, 26);
+    pool.position.set(laneX + 1, 0.05, 0);
+    pool.renderOrder = 3;
+    g.add(pool);
+    // Cartel alto con el precio, a la entrada (se ve de lejos).
+    const totem = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 3.6), new THREE.MeshStandardMaterial({
+      map: canvasTex(128, 176, (c, W, H) => {
+        c.fillStyle = '#0f6b4f'; c.fillRect(0, 0, W, H);
+        c.fillStyle = '#ffffff'; c.font = 'bold 26px Arial'; c.textAlign = 'center';
+        c.fillText('SERVICIO', W / 2, 36);
+        c.fillStyle = '#f2b705'; c.fillRect(10, 52, W - 20, 4);
+        c.fillStyle = '#ffffff'; c.font = 'bold 22px Arial';
+        c.fillText('GASOIL', W / 2, 92);
+        c.font = 'bold 34px Arial'; c.fillStyle = '#f2b705';
+        c.fillText('$ 20', W / 2, 136);
+        c.font = '16px Arial'; c.fillStyle = '#ffffff';
+        c.fillText('el %', W / 2, 160);
+      }), roughness: 0.5, emissive: 0xffffff, emissiveIntensity: 0.5
+    }));
+    totem.material.emissiveMap = totem.material.map;
+    totem.userData.ownTex = true;
+    totem.position.set(outX + 1.6, 6.2, STATION.END - 14);
+    g.add(totem);
+    g.add(boxMesh(steel, 0.3, 4.6, 0.3, outX + 1.6, 2.3, STATION.END - 14.2));
+    // Minimercado detrás de las bombas.
+    const shop = boxMesh(std(0xf1efe9, 0.85), 7, 3.4, 14, outX + 7.5, 1.7, -2);
+    g.add(shop);
+    g.add(boxMesh(std(0x1d2a33, 0.2, 0.3, { emissive: 0xffe2a8, emissiveIntensity: 0.6 }), 0.06, 2.2, 9, outX + 3.97, 1.4, -2));
+    g.add(boxMesh(std(0x0f6b4f, 0.5), 7.1, 0.5, 14.1, outX + 7.5, 3.4, -2));
+    g.userData.station = true;
+    return g;
+  }
+
   // ---------- Cruce con semáforo (salidas a las ciudades) ----------
   // Calles laterales que salen de la ruta (sides: 1 = derecha, -1 = izquierda), línea de detención antes
   // del cruce y semáforo en ménsula sobre nuestros carriles. El frente del semáforo mira al ómnibus (+z).
@@ -891,7 +999,7 @@ const World3D = (() => {
   }
 
   // ---------- Paradas ----------
-  const stopZoneTex = canvasTex(128, 512, (c, W, H) => {
+  const zoneTex = (label) => canvasTex(128, 512, (c, W, H) => {
     c.fillStyle = 'rgba(242,183,5,0.28)';
     c.fillRect(0, 0, W, H);
     c.save();
@@ -911,10 +1019,11 @@ const World3D = (() => {
     c.font = 'bold 28px Arial';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillText('PARADA', 0, 2);
+    c.fillText(label, 0, 2);
     c.restore();
   });
-  const stopZoneMat = new THREE.MeshStandardMaterial({ map: stopZoneTex, transparent: true, depthWrite: false, roughness: 0.8 });
+  const stopZoneMat = new THREE.MeshStandardMaterial({ map: zoneTex('PARADA'), transparent: true, depthWrite: false, roughness: 0.8 });
+  const pumpZoneMat = new THREE.MeshStandardMaterial({ map: zoneTex('GASOIL'), transparent: true, depthWrite: false, roughness: 0.8 });
 
   function makeStopZone() {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 16, 1, 4), stopZoneMat);
@@ -936,6 +1045,13 @@ const World3D = (() => {
       0.05, 2.0, 5.2, 0.95, 1.3, 0));
     g.add(boxMesh(metal, 2.5, 0.14, 6.1, 0, 2.68, 0));
     g.add(boxMesh(std(0x6b5440, 0.9), 0.5, 0.08, 3.5, 0.55, 0.65, 0));                  // banco
+    // Tubo de luz bajo el techo y su mancha en el piso (de noche se ve la parada de lejos).
+    g.add(boxMesh(std(0xffffff, 0.3, 0, { emissive: 0xe8f2ff, emissiveIntensity: 2 }), 0.25, 0.06, 4.5, 0, 2.58, 0));
+    const pool = new THREE.Mesh(G.pool, Ambiente.POOL_MAT);
+    pool.scale.set(11, 1, 14);
+    pool.position.set(-2.2, 0.06, 0);
+    pool.renderOrder = 3;
+    g.add(pool);
     const label = new THREE.Sprite(new THREE.SpriteMaterial({
       map: textTex(name, { w: 256, h: 64, bg: '#f2b705', color: '#10202a', font: `bold ${name.length > 12 ? 25 : name.length > 9 ? 29 : 34}px Arial` }), depthWrite: false
     }));
@@ -1601,6 +1717,6 @@ totalEmissiveRadiance += headMask * vec3(0.6);`);
     setProfile(id) { P = ROAD_PROFILES[id] || ROAD_PROFILES.ib; },
     createRoad, createWater, makeCar, makeTruck, makeMoto, makeDeco, rowParts, makeKmSign,
     makeArroyoSign, makeLocalitySign, makeWarningSign, makePeaje, makeMountain, makeFortaleza,
-    makeStopZone, makeShelter, makePerson, makeMate, makeParcel, makeTerminal, loadBus, makeCrossing
+    makeStopZone, makeShelter, makeStation, STATION, stationOuter, makePerson, makeMate, makeParcel, makeTerminal, loadBus, makeCrossing
   };
 })();

@@ -16,8 +16,11 @@ Cámara detrás del ómnibus, tránsito en contramano, curvas y lomas. Se puede 
 
 - Se puede ir **de contramano**: en la Interbalnearia, cruzando la doble amarilla hasta los dos carriles de enfrente, y en Ruta 9 por el carril izquierdo. Los autos que vienen de frente se chocan. Las encomiendas y los mates solo aparecen en tu mano.
 - Los botones tienen estilo 16 bits: esquinas rectas y sombra dura.
+- **El viaje es de noche:** cielo con estrellas y luna, faros del ómnibus sobre el asfalto, luces de los autos, faroles en las ciudades, ventanas encendidas y paradas iluminadas.
+- **Plata y gasoil:** los pasajes y las encomiendas dan plata; el gasoil se gasta andando. Se carga en las **estaciones de servicio**: un desvío corto a la derecha de la ruta (cartel "ESTACIÓN SERVICIO" antes). Hay que entrar al desvío y frenar en la zona amarilla "GASOIL", junto a las bombas. Si el gasoil llega a 0, el viaje termina.
+- **Eventos del camino:** cada tanto empieza a llover (el ómnibus frena peor), cae una niebla cerrada (se ve poco) o hay un incendio de campo a lo lejos.
 
-- Se ve realista: el cielo es una foto 360° que también ilumina la escena y se refleja en la pintura y los vidrios, el asfalto y el pasto tienen texturas reales y en calidad alta hay sombras reales.
+- Se ve realista: el cielo (de noche, hecho por código) también ilumina la escena y se refleja en la pintura y los vidrios, el asfalto y el pasto tienen texturas reales y en calidad alta hay sombras reales.
 - La calidad se ajusta sola por pasos. Si no llega a 50 cuadros por segundo, saca primero lo que menos se nota (resolución, tamaño de sombras, sombras, relieve, distancia de dibujo) y vuelve a medir después de cada paso. Lo que funcionó queda guardado en esa PC, así la próxima vez arranca directo ahí. Si en una sesión nueva anda sobrado, prueba subir un paso.
 - Para probar la PC del evento: `index.html?fps` muestra los cuadros por segundo y el paso de calidad actual.
 - Para forzar un nivel fijo: `?q=high`, `?q=medium`, `?q=low` o `?q=min` (la más baja, para PCs muy viejas). Para que olvide lo aprendido en esa PC: `?q=reset`.
@@ -122,8 +125,10 @@ La elección se puede cambiar en el título con el botón **CONTROLES**. En el c
 
 - **Paradas:** en el carril derecho, frená a 20 km/h o menos sobre la zona amarilla. Cada pasajero da 100 puntos. Si se te pasa una parada, perdés 10 % de confort.
 - **Choques:** cada choque resta 30 % de confort. Si el confort llega a 0, el viaje termina.
-- **Mate:** recupera 15 % de confort. **Encomienda:** da 50 puntos.
-- **Al llegar:** sumás 500 puntos, más un bono de puntualidad (antes de los 3:00) y un bono de confort.
+- **Mate:** recupera 15 % de confort. **Encomienda:** da 50 puntos y $ 120.
+- **Plata:** cada pasajero paga $ 180. Salís con $ 600 y el tanque al 70 %.
+- **Gasoil:** un tanque lleno alcanza para un tercio del viaje (hay 8 estaciones). Cargar cuesta $ 20 cada 1 % del tanque; carga mientras alcance la plata. Sin gasoil, el ómnibus se apaga y el viaje termina.
+- **Al llegar:** sumás 500 puntos, más un bono de puntualidad, un bono de confort y la plata que te quedó dividida 10.
 
 ## Para el organizador
 

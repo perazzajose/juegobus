@@ -13,7 +13,8 @@
 // landmarks: locality (cartel azul en ménsula; icon: town, beach, plane, fort), arroyo (cartel azul
 //         con km), peaje (hay que pasar a 40 km/h o menos), backdrop (cerros al fondo),
 //         water (mar o laguna al costado; side 1 = derecha, -1 = izquierda), fortaleza (Santa Teresa),
-//         letters (nombre de la ciudad con letras 3D de colores sobre el pasto; side como water).
+//         letters (nombre de la ciudad con letras 3D de colores sobre el pasto; side como water),
+//         estacion (estación de servicio con desvío a la derecha para cargar gasoil; dejar ~5 km libres).
 // real: de qué pedazo del trazado real (data/ruta-mvd-chuy.js, km recorridos desde Tres Cruces) salen
 //       las curvas y las lomas. Es solo una referencia: se comprime y se suaviza para el juego.
 // stops: paradas (en el carril derecho): un km ("Parada km 150") o { km, name } con el nombre del cartel.
@@ -47,6 +48,7 @@ const ROUTES3D = [
         weights: { shop: 3, building: 1.5, house: 3, tree: 2, eucalyptus: 1.5, bush: 1.5, cow: 0.5 } }
     ],
     landmarks: [
+      { km: 12, type: 'estacion' }, { km: 57, type: 'estacion' },
       { km: 25, type: 'locality', text: 'Ciudad de la Costa' },
       { km: 26.3, type: 'letters', text: 'Ciudad de la Costa' },
       { km: 32.4, type: 'arroyo', name: 'Aº Pando' },
@@ -91,6 +93,7 @@ const ROUTES3D = [
         weights: { shop: 3.5, building: 2.5, house: 3, tree: 2, eucalyptus: 1.5, bush: 1.5, palm: 1, butia: 0.5 } }
     ],
     landmarks: [
+      { km: 112, type: 'estacion' }, { km: 150, type: 'estacion' }, { km: 195, type: 'estacion' },
       { km: 135.5, type: 'locality', text: 'San Carlos' },
       { km: 136.8, type: 'letters', text: 'San Carlos' },
       { km: 140.4, type: 'arroyo', name: 'Aº San Carlos' },
@@ -134,6 +137,7 @@ const ROUTES3D = [
         weights: { shop: 4, building: 3, house: 2.5, tree: 2, bush: 1.5, palm: 1, butia: 0.5 } }
     ],
     landmarks: [
+      { km: 245, type: 'estacion' }, { km: 288, type: 'estacion' }, { km: 322, type: 'estacion' },
       { km: 236.5, type: 'arroyo', name: 'Aº Chafalote' },
       { km: 257.2, type: 'arroyo', name: 'Aº Castillos' },
       { km: 260.3, type: 'locality', text: 'Castillos' },

@@ -16,6 +16,15 @@
   const STOP_SPEED = 9;                 // 20 km/h mostrados
   const KMH = 90 / MAX_SPEED;
   const TARGET_TIME = 540;              // el viaje completo dura unos 9 minutos
+  // Plata y gasoil: los pasajes y las encomiendas dan plata; el gasoil se gasta andando y se carga
+  // (pagando) en las estaciones de servicio. Sin gasoil, el viaje se termina.
+  const PASAJE = 180, ENCOMIENDA = 120;  // $ por pasajero y por encomienda
+  const START_MONEY = 600;
+  const START_FUEL = 70;                // % del tanque al salir de Tres Cruces
+  const FUEL_PER_M = 100 / 5200;        // un tanque lleno alcanza para un tercio del viaje (~5 estaciones)
+  const FUEL_IDLE = 0.05;               // % por segundo con el motor en marcha (aunque esté parado)
+  const FUEL_PRICE = 20;                // $ por cada % del tanque (también en el cartel de la estación)
+  const FUEL_RATE = 22;                 // % por segundo que carga la bomba
   const SPAWN_AHEAD = 280;
   // Ruta 9 (un carril por mano): los que van en nuestro sentido van más lento y los de frente
   // aparecen más lejos, porque se acercan rápido.
@@ -38,9 +47,17 @@
   const twoWay = (pos) => profileAt(pos === undefined ? (S ? S.dist : 0) : pos) === 'r9';
   // Carriles por los que puede ir el ómnibus: los nuestros y también los de contramano
   // (Interbalnearia: los dos del otro lado de la doble amarilla; Ruta 9: el izquierdo, que ya es de LANE_X).
+  // Estaciones de servicio (landmarks 'estacion'): posición de juego del centro de cada una.
+  const STATION = World3D.STATION;
+  const STATIONS = R.landmarks.filter((l) => l.type === 'estacion').map((l) => posAt(l.km));
+  const stationNear = (pos, margin = STATION.END) => STATIONS.find((c) => Math.abs(pos - c) < margin);
+  // El carril del desvío se puede usar mientras tiene ancho para el ómnibus.
+  const stationOpen = (pos) => STATIONS.some((c) => World3D.stationOuter(c - pos) > STATION.laneX + 1.4);
   const busLanes = (pos) => {
-    const p = World3D.ROAD_PROFILES[profileAt(pos === undefined ? S.dist : pos)];
-    return p.id === 'ib' ? [...p.ONCOMING_LANES].sort((a, b) => a - b).concat(LANE_X) : LANE_X;
+    const at = pos === undefined ? S.dist : pos;
+    const p = World3D.ROAD_PROFILES[profileAt(at)];
+    const lanes = p.id === 'ib' ? [...p.ONCOMING_LANES].sort((a, b) => a - b).concat(LANE_X) : LANE_X;
+    return stationOpen(at) ? lanes.concat(STATION.laneX) : lanes;
   };
   // ¿El ómnibus va de contramano? (pasó la línea amarilla del centro)
   const contramano = () => S.busX < World3D.ROAD_PROFILES[profileAt(S.dist)].CENTER_X + 0.6;
@@ -110,25 +127,30 @@
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   $('view').appendChild(renderer.domElement);
 
-  // Cielo real (foto 360°) que además ilumina y se refleja en la pintura y los vidrios.
+  // El viaje es de noche: cielo con estrellas y luna (ambiente3d.js), que además se refleja en la
+  // pintura y los vidrios. La luz es la de la luna más un poco de luz de cielo; los faros, faroles y
+  // carteles iluminados son manchas de luz aditivas (sin luces reales, que pesan en el celular).
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0xc9d8e6, 90, 330);
+  const FOG_NIGHT = new THREE.Color(0x0c1322);
+  scene.fog = new THREE.Fog(FOG_NIGHT.getHex(), 90, 330);
+  const fogBase = { near: 90, far: 330 };    // los pone applyGfx; la lluvia y la niebla los achican
   let envTex = null;                        // reflejos del cielo (en "ultra baja" no se usan)
-  const skyTex = new THREE.TextureLoader().load(TEX3D.sky, (t) => {
+  const skyTex = Ambiente.nightSky();
+  {
     const pmrem = new THREE.PMREMGenerator(renderer);
-    envTex = pmrem.fromEquirectangular(t).texture;
-    if (!GFX_LEVELS[gfx.level].noEnv) scene.environment = envTex;
+    envTex = pmrem.fromEquirectangular(skyTex).texture;
     pmrem.dispose();
-  });
-  skyTex.mapping = THREE.EquirectangularReflectionMapping;
-  skyTex.colorSpace = THREE.SRGBColorSpace;
+  }
   scene.background = skyTex;
-  const hemi = new THREE.HemisphereLight(0xdfeeff, 0x5a7a3c, 0.6);
+  scene.environment = envTex;
+  scene.backgroundIntensity = 1;
+  renderer.toneMappingExposure = 1.3;
+  const hemi = new THREE.HemisphereLight(0x5a6f9e, 0x1a2230, 0.6);
   scene.add(hemi);
-  // El sol coincide con el de la foto del cielo: 53° de altura, atrás a la derecha de la cámara.
-  const SUN_DIR = new THREE.Vector3(0.475, 0.8, 0.367).normalize();
+  // La "luz del sol" ahora es la luna: viene de adelante a la izquierda, azulada (MOON_DIR).
+  const SUN_DIR = Ambiente.MOON_DIR;
   const _sunDir = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _look = new THREE.Vector3();
-  const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
+  const sun = new THREE.DirectionalLight(0xa9bcff, 1.2);
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 40, bottom: -40, near: 1, far: 180 });
   sun.shadow.bias = -0.0004;
@@ -164,6 +186,8 @@
     return {
       attract, dist: 0, speed: attract ? 22 : 0, elapsed: 0, score: 0, passengers: 0, boxes: 0, crashes: 0,
       latV: 0, roll: 0, pitch: 0, camX: LANE_X[RIGHT] * 0.75, prevSpeed: attract ? 22 : 0,
+      money: START_MONEY, fuel: START_FUEL, fuelPaid: 0, fueling: false, noMoney: 0, fuelWarn: 0,
+      weather: { rain: 0, fog: 0, event: null, nextAt: attract ? 1e9 : rand(45, 70), fireAt: rand(1200, 2000), flash: 0 },
       confort: 100, invuln: 0, stunned: 0, lane: RIGHT, targetX: LANE_X[RIGHT], busX: LANE_X[RIGHT], shake: 0,
       cars: [], pickups: [],
       stops: R.stops.map((st) => {
@@ -184,6 +208,8 @@
     obj.traverse((o) => { if (o.userData.isBlob) o.visible = !shadows; });
   }
 
+  const HEMI_NIGHT = 2.1;                  // de noche hace falta más luz de cielo para ver la ruta
+  let hemiBase = 0.6;
   function applyGfx(level) {
     gfx.level = level;
     const L = GFX_LEVELS[level];
@@ -197,12 +223,13 @@
     const shadowsChanged = renderer.shadowMap.enabled !== shadows;
     renderer.shadowMap.enabled = shadows;
     sun.castShadow = shadows;
-    hemi.intensity = L.noEnv ? 2.6 : L.lambert ? 1.8 : 0.6;
+    hemi.intensity = (L.noEnv ? 2.6 : L.lambert ? 1.8 : 0.6) * (L.lambert ? HEMI_NIGHT * 0.65 : HEMI_NIGHT);
+    hemiBase = hemi.intensity;
     scene.environment = L.noEnv ? null : envTex;
     road.setQuality(L.lambert ? 'low' : L.normals ? 'high' : 'medium');
     // Distancia de dibujo: más niebla, menos lejos y la mitad de los árboles.
-    scene.fog.near = L.tiny ? 35 : L.short ? 60 : 90;
-    scene.fog.far = L.tiny ? 150 : L.short ? 210 : 330;
+    fogBase.near = scene.fog.near = L.tiny ? 35 : L.short ? 60 : 90;
+    fogBase.far = scene.fog.far = L.tiny ? 150 : L.short ? 210 : 330;
     camera.far = L.short ? 700 : 1200;    // lejos solo se ven los cerros (sin niebla); el resto lo tapa la niebla
     decos.forEach((d, k) => { d.visible = d.userData.biomeOK !== false && decoShown(d, k); });
     if (shadowsChanged) {
@@ -282,6 +309,11 @@
     }
     let side = Math.random() < 0.5 ? 1 : -1;
     if (ranges[side][1] < ranges[side][0]) side = -side;
+    // La estación de servicio ocupa el costado derecho: ahí no va decoración.
+    if (side === 1 && stationNear(pos, STATION.END + 10)) {
+      if (ranges[-1][1] >= ranges[-1][0]) side = -1;
+      else { d.userData.pos = pos; d.userData.biomeOK = false; d.visible = false; return; }
+    }
     if (d.userData.forest) {
       // Bosque extra: solo fuera de las ciudades, tupido cerca del alambrado y raleando hacia el fondo.
       const dens = bio.lights ? 0 : bio.forest ?? 1;
@@ -601,7 +633,8 @@
           const z = -(pos - S.dist);
           const x = r.left !== undefined ? roadAt(pos).ROAD.l + r.left : r.x;
           // Fuera de la zona con alumbrado, la columna se achica a cero (no se dibuja).
-          const on = (!r.lights || biomeAt(kmAt(pos)).lights) && (r.type === 'lightPole' || !crossingNear(pos));
+          const on = (!r.lights || biomeAt(kmAt(pos)).lights) && (r.type === 'lightPole' || !crossingNear(pos)) &&
+            (x < 0 || !stationNear(pos, STATION.END + 8));      // el desvío de la estación va por ahí
           for (const o of offs) {
             _p.set(x + o[0], o[1], z + o[2]);
             if (on) _s.set(o[3], o[4], o[5]); else _s.set(0, 0, 0);
@@ -635,6 +668,11 @@
   }
 
   // ---------- Spawns ----------
+  // Todo vehículo del tránsito va con las luces prendidas (es de noche).
+  function pushCar(car) {
+    Ambiente.carLights(car);
+    S.cars.push(car);
+  }
   // Ruta 9: en nuestro carril solo van vehículos lentos (camiones, autos tranquilos, motos).
   function spawnSlowCar() {
     const p = S.dist / TRIP_M;
@@ -645,7 +683,7 @@
       const car = kind === 'truck' ? World3D.makeTruck() : kind === 'moto' ? World3D.makeMoto() : World3D.makeCar(pick(World3D.CAR_COLORS));
       car.position.x = LANE_X[RIGHT];
       addWorld(car, S.dist + SPAWN_AHEAD, { lane: RIGHT, speed: R9_SPEED[kind] * rand(0.9, 1.1) });
-      S.cars.push(car);
+      pushCar(car);
     }
     S.nextCarAt = S.dist + (150 + 90 * (1 - p)) * rand(0.75, 1.3);
   }
@@ -661,7 +699,7 @@
     car.rotation.y = Math.PI;
     car.position.x = ib ? pick(World3D.ROAD_PROFILES.ib.ONCOMING_LANES) : LANE_X[0];
     addWorld(car, at, { lane: -1, speed: -rand(19, 24), oncoming: true, ibLane: ib });
-    S.cars.push(car);
+    pushCar(car);
     const gap = ib ? rand(70, 170) : Math.random() < 0.3 ? rand(300, 450) : rand(80, 200);
     S.nextOncomingAt = S.dist + gap * (1 - 0.25 * p);
   }
@@ -682,7 +720,7 @@
       else car = World3D.makeCar(pick(World3D.CAR_COLORS));
       car.position.x = LANE_X[lane];
       addWorld(car, S.dist + SPAWN_AHEAD, { lane, speed: LANE_SPEED[lane] });
-      S.cars.push(car);
+      pushCar(car);
     }
     // Huecos más largos que antes: el ómnibus cambia de carril despacio.
     S.nextCarAt = S.dist + (75 + 55 * (1 - p)) * rand(0.75, 1.25) + (S.attract ? 25 : 0);
@@ -711,6 +749,7 @@
       if (l.type === 'backdrop' || l.type === 'water') return;
       marks.push({ ...l, pos: posAt(l.km), spawned: false });
       if (l.type === 'peaje') marks.push({ type: 'warning', km: l.km - 1, pos: posAt(l.km - 1), l1: 'PEAJE', l2: 'A 1 km' });
+      if (l.type === 'estacion') marks.push({ type: 'warning', km: l.km, pos: posAt(l.km) - 330, l1: 'ESTACIÓN', l2: 'SERVICIO' });
     });
     return marks;
   }
@@ -728,6 +767,7 @@
     }
     else if (m.type === 'warning') { obj = World3D.makeWarningSign(m.l1, m.l2); obj.position.x = 7.4; }
     else if (m.type === 'peaje') { obj = World3D.makePeaje(m.name); }
+    else if (m.type === 'estacion') { obj = World3D.makeStation(); }
     else if (m.type === 'fortaleza') { obj = World3D.makeFortaleza(); obj.position.x = 75; obj.rotation.y = 0.3; }
     else if (m.type === 'letters' && Models3D.hasLetters()) {
       // Letras de colores sobre el pasto, giradas hacia la ruta para que se lean desde el ómnibus.
@@ -825,7 +865,10 @@
         S.stunned -= dt;
         S.speed = Math.max(0, S.speed - 60 * dt);
       } else if (braking) {
-        S.speed = Math.max(0, S.speed - BRAKE * dt);
+        // Con la calzada mojada el ómnibus frena peor.
+        S.speed = Math.max(0, S.speed - BRAKE * (1 - 0.3 * S.weather.rain) * dt);
+      } else if (S.fuel <= 0) {
+        S.speed = Math.max(0, S.speed - 3 * dt);     // sin gasoil: el motor se apaga y va quedando
       } else {
         // La aceleración cae a medida que sube la velocidad, como un motor cargado.
         S.speed = Math.min(MAX_SPEED, S.speed + ACCEL * (1 - 0.55 * S.speed / MAX_SPEED) * dt);
@@ -849,6 +892,7 @@
     }
 
     S.dist += S.speed * dt;
+    if (playing) useFuel(dt);
     road.scroll(S.dist);
     updateRoadProfile();
     // Curvas y lomas (bend3d.js).
@@ -859,7 +903,9 @@
     // Dirección con inercia: la velocidad lateral sigue al carril elegido de a poco, sin pasarse.
     // Parado casi no se puede mover de costado (un ómnibus no hace "strafe").
     // Donde la ruta se angosta (fin de la Interbalnearia), el ómnibus vuelve a la calzada.
-    S.targetX = Math.max(S.targetX, busLanes()[0]);
+    // Al terminar el desvío de la estación, vuelve solo a la ruta.
+    const lanesNow = busLanes();
+    S.targetX = Math.max(lanesNow[0], Math.min(lanesNow[lanesNow.length - 1], S.targetX));
     const err = S.targetX - S.busX;
     const steer = Math.min(1, 0.2 + S.speed / 14);
     const want = Math.max(-LAT_MAX, Math.min(LAT_MAX, err * 1.6)) * steer;
@@ -907,6 +953,11 @@
     updateTraffic(dt);
     updateDecos(dt);
     updateAnims(dt);
+    updateWeather(dt);
+    // Faros del ómnibus sobre el asfalto (siguen al ómnibus).
+    headPool.position.x = S.busX;
+    headPool.rotation.y = bus.rotation.y;
+    headPool.visible = bus.visible || S.invuln > 0;
 
     if (playing) {
       checkCars();
@@ -914,6 +965,8 @@
       checkStops();
       checkPeajes();
       checkCrossings();
+      checkStation(dt);
+      if (S.fuel <= 0 && S.speed < 0.3) finish(false, 'fuel');
       if (S.dist >= TRIP_M) finish(true);
     }
 
@@ -985,7 +1038,7 @@
       u.cross = { v: 8.5, xEnd: P.ROAD.r + 30 };
       addWorld(car, m.pos + 2, u);
     }
-    S.cars.push(car);
+    pushCar(car);
   }
 
   // Tránsito: los autos que salen de las calles, los que van adelante frenan en el semáforo en rojo y
@@ -1123,7 +1176,8 @@
       } else {
         S.boxes++;
         S.score += 50;
-        popup('Encomienda +50', '#ffd36b');
+        S.money += ENCOMIENDA;
+        popup(`Encomienda +$${ENCOMIENDA}`, '#ffd36b');
       }
     }
   }
@@ -1180,6 +1234,7 @@
     s.done = true;
     S.passengers += s.waiting;
     S.score += s.waiting * 100;
+    S.money += s.waiting * PASAJE;
     Sfx.board();
     s.people.forEach((p, i) => {
       const i0 = world.indexOf(p);
@@ -1188,11 +1243,102 @@
         animate(p, new THREE.Vector3(S.busX + 1.4, 0.3, -4.5), 0.45, () => scene.remove(p));
       }, i * 110);
     });
-    popup(`+${s.waiting} pasajeros  (+${s.waiting * 100})`, '#9be37a');
+    popup(`+${s.waiting} pasajeros  (+$${money(s.waiting * PASAJE)})`, '#9be37a');
     drawProgress();
   }
 
-  function finish(arrived) {
+  // ---------- Gasoil y estaciones de servicio ----------
+  const money = (n) => Math.round(n).toLocaleString('es-UY');
+  function useFuel(dt) {
+    if (S.fuel <= 0) return;
+    S.fuel = Math.max(0, S.fuel - S.speed * dt * FUEL_PER_M - FUEL_IDLE * dt);
+    if (S.fuel <= 0) { Sfx.miss(); popup('¡Sin gasoil!', '#ff6b5e'); }
+    else if (S.fuel < 20 && S.fuelWarn < 1) { S.fuelWarn = 1; popup('¡Queda poco gasoil!', '#ffb347'); }
+    else if (S.fuel < 10 && S.fuelWarn < 2) { S.fuelWarn = 2; popup('¡Reserva! Cargá en la próxima estación', '#ff6b5e'); }
+  }
+  // Parado (o casi) junto a las bombas, carga de a poco mientras alcance la plata.
+  function checkStation(dt) {
+    const c = stationNear(S.dist, STATION.pumpHalf);
+    const atPump = c !== undefined && Math.abs(S.busX - STATION.laneX) < 0.9 && S.speed < 1.5;
+    const was = S.fueling;
+    S.fueling = false;
+    if (!atPump || S.fuel >= 99.9) {
+      if (was) popup(`Tanque al ${Math.round(S.fuel)}%  (-$${money(S.fuelPaid)})`, '#9be37a');
+      if (was || !atPump) S.fuelPaid = 0;
+      return;
+    }
+    const add = Math.min(FUEL_RATE * dt, 100 - S.fuel, S.money / FUEL_PRICE);
+    if (add <= 0.001) { S.noMoney = 1; return; }
+    S.noMoney = 0;
+    S.fuel += add;
+    S.money = Math.max(0, S.money - add * FUEL_PRICE);
+    S.fuelPaid += add * FUEL_PRICE;
+    S.fuelWarn = S.fuel < 10 ? 2 : S.fuel < 20 ? 1 : 0;
+    S.fueling = true;
+  }
+
+  // ---------- Noche y eventos del camino (lluvia, niebla, incendios) ----------
+  const headPool = Ambiente.headlightPool();
+  scene.add(headPool);
+  scene.add(camera);                       // la lluvia va colgada de la cámara
+  let rain = null;
+  const EVENTS = ['rain', 'fog', 'rain', 'fog'];
+  const EVENT_TEXT = {
+    rain: ['Empieza a llover', 'Calzada mojada: frená con tiempo'],
+    fog: ['Niebla cerrada', 'Se ve poco: bajá la velocidad']
+  };
+  function updateWeather(dt) {
+    const W = S.weather;
+    const L = GFX_LEVELS[gfx.level];
+    // Eventos: uno por vez, con 40-60 s de duración; entran y salen de a poco.
+    if (mode === 'play') {
+      if (!W.event && S.elapsed > W.nextAt) {
+        W.event = { type: pick(EVENTS), t: 0, dur: rand(40, 60) };
+        const [a, b] = EVENT_TEXT[W.event.type];
+        toast(`${a}<br><small>${b}</small>`, '#cfe3ff');
+      }
+      if (W.event) {
+        W.event.t += dt;
+        if (W.event.t > W.event.dur) { W.event = null; W.nextAt = S.elapsed + rand(50, 90); }
+      }
+      // Incendios de campo a lo lejos, fuera de las ciudades (no con niebla: no se verían).
+      if (S.dist > W.fireAt && !biomeAt(kmAt(S.dist + 400)).lights && !(W.event && W.event.type === 'fog')) {
+        W.fireAt = S.dist + rand(1700, 2800);
+        const side = Math.random() < 0.5 ? 1 : -1;
+        const fire = Ambiente.makeFire(rand(36, 60));
+        fire.position.x = side * rand(110, 170);
+        addWorld(fire, S.dist + rand(420, 560), { fire: true });
+        popup(`Incendio de campo a lo lejos, a la ${side > 0 ? 'derecha' : 'izquierda'}`, '#ffb347');
+      }
+    }
+    const want = (k) => (W.event && W.event.type === k && W.event.t < W.event.dur - 5 ? 1 : 0);
+    W.rain += (want('rain') - W.rain) * Math.min(1, dt * 0.5);
+    W.fog += (want('fog') - W.fog) * Math.min(1, dt * 0.4);
+    if (W.rain < 0.002) W.rain = 0;
+    if (W.fog < 0.002) W.fog = 0;
+    // Niebla: se ve mucho menos y el color se aclara (la niebla refleja las luces).
+    scene.fog.near = fogBase.near * (1 - 0.8 * W.fog) * (1 - 0.35 * W.rain);
+    scene.fog.far = fogBase.far * (1 - 0.72 * W.fog) * (1 - 0.3 * W.rain);
+    scene.fog.color.copy(FOG_NIGHT).lerp(FOG_FOGGY, W.fog);
+    scene.backgroundIntensity = 1 - 0.85 * Math.max(W.fog, W.rain * 0.7);
+    // Lluvia: rayitas frente a la cámara (menos gotas en las calidades bajas) y algún relámpago.
+    if (W.rain > 0) {
+      if (!rain) {
+        rain = Ambiente.makeRain(L.tiny ? 500 : L.short ? 1000 : 1800);
+        camera.add(rain);
+      }
+      rain.visible = true;
+      rain.userData.update(S.elapsed, 0.42 * W.rain);
+      if (W.rain > 0.8 && Math.random() < dt * 0.06) W.flash = 1;
+    } else if (rain) rain.visible = false;
+    W.flash = Math.max(0, W.flash - dt * 3);
+    hemi.intensity = hemiBase * (1 - 0.25 * W.rain) + W.flash * W.flash * 2.5;   // relámpago: un destello corto
+    // Incendios: llamas y humo animados.
+    for (const o of world) if (o.userData.fire) o.userData.update(S.elapsed);
+  }
+  const FOG_FOGGY = new THREE.Color(0x3a4352);
+
+  function finish(arrived, reason) {
     if (mode !== 'play') return;          // una sola vez por viaje (varias penalidades en el mismo cuadro)
     mode = 'ending';
     touchBrake = false;
@@ -1202,8 +1348,9 @@
       toast(`¡LLEGASTE A ${R.dest.toUpperCase()}!`, '#f2b705');
     } else {
       Sfx.fail();
-      toast('Los pasajeros se quejaron...<br>Viaje terminado', '#ff6b5e');
+      toast(reason === 'fuel' ? '¡Te quedaste sin gasoil!<br>Viaje terminado' : 'Los pasajeros se quejaron...<br>Viaje terminado', '#ff6b5e');
     }
+    S.endReason = reason || null;
     setTimeout(() => showResult(arrived), 2300);
   }
 
@@ -1312,6 +1459,17 @@
     setText('hSpeed', `${Math.round(S.speed * KMH)} km/h`);
     setText('hPax', `PASAJ. ${S.passengers}`);
     setText('hScore', `${S.score} pts`);
+    setText('hMoney', `$ ${money(S.money)}`);
+    const W = S.weather;
+    setText('hWeather', W.fog > 0.3 ? 'NIEBLA' : W.rain > 0.3 ? 'LLUVIA' : '');
+    const f = Math.ceil(S.fuel);
+    if (hudCache.fuel !== f) {
+      hudCache.fuel = f;
+      const fill = $('hFuel');
+      fill.style.width = f + '%';
+      fill.style.background = f > 35 ? '#3fbf5f' : f > 15 ? '#f2b705' : '#e0453a';
+      $('fuel').classList.toggle('low', f <= 15);
+    }
     $('hBus').style.left = Math.min(1, S.dist / TRIP_M) * 100 + '%';
     const c = Math.round(S.confort);
     if (hudCache.confort !== c) {
@@ -1334,7 +1492,22 @@
     // De contramano: si se acerca alguien por tu carril, es lo primero que se avisa.
     const headOn = contramano() && S.cars.some((c) => c.userData.oncoming && !c.userData.hit &&
       c.position.z < 0 && c.position.z > -200 && Math.abs(c.position.x - S.busX) < 2.6);
-    if (headOn && mode === 'play') {
+    // Estación de servicio: adelante (si falta gasoil), en el desvío y cargando.
+    const st = STATIONS.find((c) => c - S.dist > -STATION.FULL && c - S.dist < 420);
+    const inStation = st !== undefined && S.busX > 6.5;
+    if (S.fuel <= 0 && mode === 'play') {
+      msg = '¡SIN GASOIL!';
+    } else if (inStation && mode === 'play' && st - S.dist > -STATION.pumpHalf) {
+      const d = st - S.dist;
+      if (S.fueling) msg = `Cargando gasoil… ${Math.floor(S.fuel)}%  ·  -$${money(S.fuelPaid)}`;
+      else if (S.noMoney) msg = 'No te alcanza la plata para cargar';
+      else if (S.fuel >= 99.9) msg = 'Tanque lleno · seguí viaje ◀';
+      else if (Math.abs(d) < STATION.pumpHalf) msg = S.speed > 1.5 ? '¡FRENÁ en las bombas!' : 'Cargando…';
+      else msg = `Bombas en ${realM(d)} m · frená en la zona amarilla`;
+    } else if (st !== undefined && !inStation && st - S.dist > 40 && st - S.dist < 330 && S.fuel < 85 && mode === 'play' && !headOn) {
+      const m = realM(st - S.dist);
+      msg = `Estación de servicio a ${m >= 1000 ? kmText(m / 1000) + ' km' : m + ' m'} · ▶ desvío a la derecha`;
+    } else if (headOn && mode === 'play') {
       msg = '¡VIENE UNO DE FRENTE!  Volvé a tu carril ▶';
     } else if (contramano() && !twoWay() && mode === 'play') {
       msg = '¡VAS DE CONTRAMANO!  Volvé a tu mano ▶';
@@ -1433,7 +1606,10 @@
   const TIPS = [
     'Pasá los peajes a 40 km/h o menos, por tu carril.',
     'En los semáforos de las salidas frená antes de la línea y esperá el verde.',
-    'Ruta 9 tiene un carril por mano: para pasar a un camión salí al carril de enfrente cuando no venga nadie.'
+    'Ruta 9 tiene un carril por mano: para pasar a un camión salí al carril de enfrente cuando no venga nadie.',
+    'Los pasajes y las encomiendas dan plata. Con esa plata cargás gasoil: si te quedás sin, se termina el viaje.',
+    'Para cargar gasoil, entrá al desvío de la estación de servicio (a la derecha) y frená en las bombas.',
+    'Con lluvia el ómnibus frena peor, y con niebla se ve poco: andá más despacio.'
   ];
   let tipIdx = Math.floor(Math.random() * TIPS.length);
   function renderTitle() {
@@ -1497,7 +1673,7 @@
     const secs = String(Math.floor(S.elapsed % 60)).padStart(2, '0');
     const stopsDone = S.stops.filter((s) => s.done).length;
     const confort = Math.round(S.confort);
-    $('rTitle').textContent = arrived ? '¡LLEGASTE!' : 'VIAJE TERMINADO';
+    $('rTitle').textContent = arrived ? '¡LLEGASTE!' : S.endReason === 'fuel' ? 'SIN GASOIL' : 'VIAJE TERMINADO';
     $('rTitle').style.color = arrived ? '#f2b705' : '#ff6b5e';
     // Km recorridos: suma de lo hecho en cada segmento (sin el salto de km de Pan de Azúcar).
     const kmDone = SEGS.reduce((a, g) => a + Math.max(0, Math.min(g.to, kmAt(Math.min(S.dist, g.p1 - 0.01))) - g.from) * (S.dist > g.p0 ? 1 : 0), 0);
@@ -1510,6 +1686,7 @@
       rows.push(['Llegada a destino', 500]);
       rows.push(['Puntualidad', Math.max(0, Math.round((TARGET_TIME - S.elapsed) * 20))]);
       rows.push([`Confort (${confort}% × 5)`, confort * 5]);
+      rows.push([`Plata en caja ($ ${money(S.money)} ÷ 10)`, Math.round(S.money / 10)]);
     }
     const total = rows.reduce((a, r) => a + r[1], 0);
     const table = $('rRows');
@@ -1552,11 +1729,11 @@
   // y al soltar se queda donde está (también entre dos carriles).
   const TAP_TIME = 0.22;                // más que esto apretado ya es "mantener"
   const steer = { dir: 0, held: 0 };
-  const clampX = (x) => Math.max(busLanes()[0], Math.min(LANE_X[RIGHT], x));
+  const clampX = (x) => { const l = busLanes(); return Math.max(l[0], Math.min(l[l.length - 1], x)); };
 
   function nextLaneX(x, dir) {
     const lanes = busLanes();
-    if (dir > 0) return lanes.find((l) => l > x + 0.4) ?? LANE_X[RIGHT];
+    if (dir > 0) return lanes.find((l) => l > x + 0.4) ?? lanes[lanes.length - 1];
     return [...lanes].reverse().find((l) => l < x - 0.4) ?? lanes[0];
   }
 

@@ -25,10 +25,15 @@
     #progress .end { position: absolute; right: -2px; top: -6px; width: 6px; height: 24px; background: #fff; }
     #progress .bus { position: absolute; top: -5px; width: 12px; height: 18px; margin-left: -6px; background: #fff;
       border: 2px solid var(--brand); border-radius: 3px; }
-    #confort { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
-    #confort .bar { display: inline-block; width: 130px; height: 14px; background: #3b3d42; border-radius: 6px; overflow: hidden; }
-    #confort .fill { display: block; height: 100%; width: 100%; background: var(--good); transition: width 0.2s; }
-    #banner { position: fixed; top: 128px; left: 50%; transform: translateX(-50%); background: var(--accent); color: var(--ink);
+    #confort, #fuel { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+    #hud .row + .row { margin-top: 6px; }
+    #hMoney { color: #9be37a; }
+    #fuel.low { color: #ff6b5e; animation: blink 0.8s steps(2) infinite; }
+    @keyframes blink { 50% { opacity: 0.35; } }
+    #hWeather { color: #cfe3ff; font-size: 13px; min-width: 60px; text-align: right; }
+    #confort .bar, #fuel .bar { display: inline-block; width: 130px; height: 14px; background: #3b3d42; border-radius: 6px; overflow: hidden; }
+    #confort .fill, #fuel .fill { display: block; height: 100%; width: 100%; background: var(--good); transition: width 0.2s; }
+    #banner { position: fixed; top: 154px; left: 50%; transform: translateX(-50%); background: var(--accent); color: var(--ink);
       font-weight: bold; font-size: 19px; padding: 7px 14px; border-radius: 6px; white-space: nowrap; }
 
     /* Botones táctiles */
@@ -132,8 +137,8 @@
       #hud { padding: 6px 10px 8px; }
       #hud .big { font-size: 18px; }
       #hud .row { gap: 6px; font-size: 13px; }
-      #confort .bar { width: 80px; }
-      #banner { font-size: 15px; top: 104px; white-space: normal; text-align: center; width: max-content; max-width: calc(100% - 32px); }
+      #confort .bar, #fuel .bar { width: 80px; }
+      #banner { font-size: 15px; top: 126px; white-space: normal; text-align: center; width: max-content; max-width: calc(100% - 32px); }
       #bPause { top: 96px; }
       .popup { font-size: 19px; }
       #toast { font-size: 24px; }
@@ -163,7 +168,7 @@
       #hud { padding: 4px 12px 6px; }
       #hud .big { font-size: 17px; }
       #progress { margin: 6px 0; }
-      #banner { top: 84px; font-size: 15px; }
+      #banner { top: 104px; font-size: 15px; }
       #bPause { top: 80px; width: 40px; height: 40px; }
       #touch { bottom: 8px; }
       #touch button { height: 62px; font-size: 22px; }
@@ -203,6 +208,9 @@
     <div class="row"><span id="hPax">PASAJ. 0</span>
       <span id="confort">CONFORT <span class="bar"><span class="fill" id="hConfort"></span></span></span>
       <span id="hScore" class="time">0 pts</span></div>
+    <div class="row"><span id="hMoney">$ 600</span>
+      <span id="fuel">GASOIL <span class="bar"><span class="fill" id="hFuel"></span></span></span>
+      <span id="hWeather"></span></div>
   </div>
   <div id="banner" class="hidden"></div>
   <div id="toast"></div>
@@ -298,6 +306,7 @@
   </script>
   <script src="lib/three.bundle.min.js"></script>
   <script src="src3d/bend3d.js"></script>
+  <script src="src3d/ambiente3d.js"></script>
   <script src="data/ruta-mvd-chuy.js"></script>
   <script src="src3d/rutaReal.js"></script>
   <script src="src/sound.js"></script>
