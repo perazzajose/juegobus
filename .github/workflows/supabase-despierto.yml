@@ -1,0 +1,58 @@
+# Mantiene despierto el proyecto de Supabase del ranking online.
+# Supabase pausa los proyectos gratis que pasan una semana sin actividad en la base de datos.
+# Esto lee el ranking cada 2 días (una consulta real a la base), con la misma URL y clave pública
+# que usa el juego (src/rankingConfig.js). Si la consulta falla, la ejecución queda en rojo y
+# GitHub le manda un mail al dueño del repo.
+#
+# Además: GitHub apaga los workflows programados de un repo público que pasa 60 días sin commits.
+# Si el último commit tiene más de 45 días, se hace un commit chiquito (.github/despierto.txt)
+# para que este aviso no se apague nunca.
+name: Supabase despierto
+
+on:
+  schedule:
+    - cron: '17 11 */2 * *'     # cada 2 días, 8:17 de Uruguay
+  workflow_dispatch:             # y a mano, desde la pestaña Actions
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Consultar el ranking
+        run: |
+          URL=$(sed -n "s/^ *url: *'\(.*\)',* *$/\1/p" src/rankingConfig.js | head -1)
+          KEY=$(sed -n "s/^ *key: *'\(.*\)',* *$/\1/p" src/rankingConfig.js | head -1)
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then
+            echo "El ranking online todavía no está configurado (src/rankingConfig.js). Nada que hacer."
+            exit 0
+          fi
+          for i in 1 2 3; do
+            CODE=$(curl -s -o respuesta.json -w '%{http_code}' \
+              "$URL/rest/v1/ranking?select=id,puntos&order=puntos.desc&limit=5" \
+              -H "apikey: $KEY" -H "Authorization: Bearer $KEY")
+            echo "Intento $i: HTTP $CODE"
+            if [ "$CODE" = "200" ]; then cat respuesta.json; echo; exit 0; fi
+            sleep 20
+          done
+          echo "::error::Supabase no respondió. Si el proyecto quedó pausado, entrá a supabase.com y tocá 'Resume project'."
+          exit 1
+
+      - name: Evitar que GitHub apague este aviso
+        run: |
+          LAST=$(git log -1 --format=%ct)
+          NOW=$(date +%s)
+          if [ $(( (NOW - LAST) / 86400 )) -ge 45 ]; then
+            date -u +"%Y-%m-%d %H:%M UTC" > .github/despierto.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/despierto.txt
+            git commit -m "Aviso para que Supabase y este workflow sigan activos"
+            git push
+          else
+            echo "Hubo commits hace menos de 45 días: no hace falta."
+          fi

@@ -130,6 +130,21 @@ La elección se puede cambiar en el título con el botón **CONTROLES**. En el c
 - **Gasoil:** un tanque lleno alcanza para un tercio del viaje (hay 8 estaciones). Cargar cuesta $ 60 cada 1 % del tanque; carga mientras alcance la plata. Sin gasoil, el ómnibus se apaga y el viaje termina.
 - **Al llegar:** sumás 500 puntos, más un bono de puntualidad, un bono de confort y la plata que te quedó dividida 10.
 
+## Ranking online (Supabase)
+
+El ranking (nombre + empresa + puntos) se guarda en una base de datos de Supabase y se ve igual en todas las PCs y celulares. Si no hay internet, el juego sigue con el ranking de esa PC y manda los viajes pendientes la próxima vez que haya conexión.
+
+**Configurarlo (una sola vez):**
+
+1. En [supabase.com](https://supabase.com) crear un proyecto gratis.
+2. En **SQL Editor**, pegar todo `supabase/ranking.sql` y tocar **Run**. Crea la tabla `ranking` con permisos para leer y agregar viajes, pero no para borrar ni cambiar.
+3. En **Project Settings → API**, copiar la **Project URL** y la clave pública **anon / publishable** a `src/rankingConfig.js`. Nunca la `service_role` ni la `secret`.
+4. Subir el cambio a GitHub.
+
+**Que no se pause:** Supabase pausa los proyectos gratis que pasan una semana sin actividad. El workflow `.github/workflows/supabase-despierto.yml` consulta el ranking cada 2 días, así nunca llega a pausarse, y si alguna vez falla, GitHub manda un mail. Como GitHub apaga los workflows programados de un repo sin commits por 60 días, el mismo workflow hace un commit chiquito cada 45 días sin actividad. Se puede correr a mano en **Actions → Supabase despierto → Run workflow**.
+
+**Borrar el ranking online:** en Supabase, SQL Editor: `truncate public.ranking restart identity;` (Shift + B en el título borra solo el ranking de esa PC).
+
 ## Para el organizador
 
 - El ranking (top 10) se guarda en el navegador de esa máquina.

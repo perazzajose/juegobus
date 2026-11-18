@@ -1608,15 +1608,22 @@
   // ---------- Pantallas ----------
   function show(id, on) { $(id).classList.toggle('hidden', !on); }
 
+  // Muestra el ranking online si ya se descargó (RankingOnline.cache); si no, el de esta PC.
+  // highlight: posición en el ranking local, o { id } de un viaje del ranking online.
   function rankTable(el, highlight, max) {
-    const list = Ranking.load().slice(0, max);
+    const online = RankingOnline.cache && RankingOnline.cache.length ? RankingOnline.cache : null;
+    const list = online
+      ? online.slice(0, max).map((r) => ({ id: r.id, name: r.nombre, company: r.empresa, score: r.puntos }))
+      : Ranking.load().slice(0, max);
     el.innerHTML = '';
     if (!list.length) return;
     const cap = el.createCaption();
-    cap.textContent = `${max <= 5 ? 'MEJORES VIAJES' : 'RANKING'} · ${R.origin} → ${R.dest}`;
+    cap.textContent = online ? `RANKING ONLINE · ${R.origin} → ${R.dest}`
+      : `${max <= 5 ? 'MEJORES VIAJES' : 'RANKING'} · ${R.origin} → ${R.dest}`;
     list.forEach((r, i) => {
       const tr = el.insertRow();
-      if (i === highlight) tr.className = 'me';
+      const me = online ? highlight && highlight.id != null && r.id === highlight.id : i === highlight;
+      if (me) tr.className = 'me';
       const c1 = tr.insertCell();
       c1.textContent = `${i + 1}. ${r.name} `;
       const co = COMPANIES.find((c) => c.id === r.company);
@@ -1672,6 +1679,10 @@
     });
     box.appendChild(b);
     rankTable($('titleRank'), -1, 5);
+    // Ranking online: se actualiza en cuanto llega (y de paso manda viajes que quedaron pendientes).
+    RankingOnline.flush().then(() => RankingOnline.top(10)).then((list) => {
+      if (list && mode === 'title') rankTable($('titleRank'), -1, 5);
+    });
   }
 
   function startGame() {
@@ -1746,6 +1757,11 @@
     };
     if (Ranking.qualifies(total)) done(Ranking.add(player.name || 'JUGADOR', total, player.company));
     else done(-1);
+    // Ranking online: se manda el viaje y, cuando vuelve, se muestra el top con este viaje resaltado.
+    RankingOnline.add(player.name || 'JUGADOR', player.company, total, kmDone, arrived)
+      .then((id) => RankingOnline.top(10).then((list) => {
+        if (list && mode === 'result') rankTable($('rRank'), { id }, 10);
+      }));
   }
 
   // Después de cada viaje vuelve al título y pide el próximo jugador (el anterior queda cargado).
