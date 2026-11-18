@@ -77,6 +77,12 @@
     .rows td { padding: 6px 2px; text-align: left; }
     .rows td:last-child { text-align: right; font-weight: bold; }
     .total { font-size: 40px; font-weight: bold; color: var(--accent); margin-top: 10px; border-top: 2px solid rgba(255,255,255,0.4); padding-top: 12px; }
+    /* Franjas de cine de la presentación (mini cinemática al salir). */
+    #cine { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+    #cine div { position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height 0.5s ease; }
+    #cine div:first-child { top: 0; }
+    #cine div:last-child { bottom: 0; }
+    #cine.on div { height: 11vh; }
     #pauseScreen .card { width: auto; font-size: 34px; font-weight: bold; }
     #pauseScreen .pauseMenu { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 8px; min-width: 280px; }
     #pauseScreen .pauseMenu button { margin: 0; width: 100%; }
@@ -218,6 +224,7 @@
       <span id="fuel">GASOIL <span class="bar"><span class="fill" id="hFuel"></span></span></span>
       <span id="hWeather"></span></div>
   </div>
+  <div id="cine"><div></div><div></div></div>
   <div id="banner" class="hidden"></div>
   <div id="toast"></div>
 
@@ -320,26 +327,26 @@
     })();
   </script>
   <!-- Versión de los scripts (?v=): cambiarla en cada subida para que el navegador no mezcle archivos viejos y nuevos. -->
-  <script src="lib/three.bundle.min.js?v=20261118-1"></script>
-  <script src="src3d/bend3d.js?v=20261118-1"></script>
-  <script src="src3d/ambiente3d.js?v=20261118-1"></script>
-  <script src="data/ruta-mvd-chuy.js?v=20261118-1"></script>
-  <script src="src3d/rutaReal.js?v=20261118-1"></script>
-  <script src="src/sound.js?v=20261118-1"></script>
-  <script src="src/rankingConfig.js?v=20261118-1"></script>
-  <script src="src/ranking.js?v=20261118-1"></script>
-  <script src="src3d/busModel.js?v=20261118-1"></script>
-  <script src="src3d/textures3d.js?v=20261118-1"></script>
-  <script src="src3d/route3d.js?v=20261118-1"></script>
-  <script src="src3d/skins/rutas_del_sol.js?v=20261118-1"></script>
-  <script src="src3d/skins/cynsa.js?v=20261118-1"></script>
-  <script src="src3d/models/nature.js?v=20261118-1"></script>
-  <script src="src3d/models/cars.js?v=20261118-1"></script>
-  <script src="src3d/models/houses.js?v=20261118-1"></script>
-  <script src="src3d/models/letters.js?v=20261118-1"></script>
-  <script src="src3d/models3d.js?v=20261118-1"></script>
-  <script src="src3d/skins/cot_mejorada.js?v=20261118-1"></script>
-  <script src="src3d/world3d.js?v=20261118-1"></script>
-  <script src="src3d/game3d.js?v=20261118-1"></script>
+  <script src="lib/three.bundle.min.js?v=20261118-2"></script>
+  <script src="src3d/bend3d.js?v=20261118-2"></script>
+  <script src="src3d/ambiente3d.js?v=20261118-2"></script>
+  <script src="data/ruta-mvd-chuy.js?v=20261118-2"></script>
+  <script src="src3d/rutaReal.js?v=20261118-2"></script>
+  <script src="src/sound.js?v=20261118-2"></script>
+  <script src="src/rankingConfig.js?v=20261118-2"></script>
+  <script src="src/ranking.js?v=20261118-2"></script>
+  <script src="src3d/busModel.js?v=20261118-2"></script>
+  <script src="src3d/textures3d.js?v=20261118-2"></script>
+  <script src="src3d/route3d.js?v=20261118-2"></script>
+  <script src="src3d/skins/rutas_del_sol.js?v=20261118-2"></script>
+  <script src="src3d/skins/cynsa.js?v=20261118-2"></script>
+  <script src="src3d/models/nature.js?v=20261118-2"></script>
+  <script src="src3d/models/cars.js?v=20261118-2"></script>
+  <script src="src3d/models/houses.js?v=20261118-2"></script>
+  <script src="src3d/models/letters.js?v=20261118-2"></script>
+  <script src="src3d/models3d.js?v=20261118-2"></script>
+  <script src="src3d/skins/cot_mejorada.js?v=20261118-2"></script>
+  <script src="src3d/world3d.js?v=20261118-2"></script>
+  <script src="src3d/game3d.js?v=20261118-2"></script>
 </body>
 </html>

@@ -113,6 +113,10 @@ La elección se puede cambiar en el título con el botón **CONTROLES**. En el c
 
 ## Controles
 
+**Dirección:** mientras apretás ◀ ▶ (o ← →) el ómnibus va hacia ese lado y al soltar se queda donde está; podés ir entre carriles y un poco por la banquina. Para subir pasajeros o cargar gasoil alcanza con que una rueda pise la luz.
+
+**Al salir** hay una presentación corta del ómnibus (se saltea tocando la pantalla o con cualquier tecla).
+
 **Pausa** (botón II en el celular, P o Esc en la PC): seguir, reiniciar el viaje, cambiar nombre/empresa/ómnibus y reiniciar, o salir al título. En la PC, R reinicia.
 
 | Acción | Teclado | Celular (botones) | Celular (inclinación) |

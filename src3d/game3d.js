@@ -15,6 +15,11 @@
   const LAT_ACC = 4.5;                  // qué tan rápido gira el volante (m/s²)
   const STOP_SPEED = 9;                 // 20 km/h mostrados
   const STOP_OVER = 40;                 // m: hasta dónde se puede frenar pasado de la parada (con queja)
+  // Hitbox de las zonas (parada y bombas): alcanza con que una rueda pise la luz. Las ruedas están a
+  // ~1,1 m del eje del ómnibus y la zona tiene 3,4 m de ancho; a lo largo, el ómnibus mide ~12 m.
+  const ZONE_REACH_X = 1.7 + 1.1;
+  const ZONE_REACH_Z = 8 + 6;
+  const inZoneX = (zoneX) => Math.abs(S.busX - zoneX) < ZONE_REACH_X;
   const KMH = 90 / MAX_SPEED;
   const TARGET_TIME = 540;              // el viaje completo dura unos 9 minutos
   // Plata y gasoil: los pasajes y las encomiendas dan plata; el gasoil se gasta andando y se carga
@@ -185,6 +190,7 @@
   const SUN_DIR = new THREE.Vector3();
   const SUN_AZ = new THREE.Vector3(0.32, 0, 0.95).normalize();
   const _sunDir = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _look = new THREE.Vector3();
+  const _introPos = new THREE.Vector3(), _introLook = new THREE.Vector3();
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 40, bottom: -40, near: 1, far: 180 });
@@ -911,6 +917,10 @@
       bus.userData.setBrake(braking || S.stunned > 0);
       // En las subidas el ómnibus pierde velocidad y en las bajadas gana (sin pasar la máxima).
       S.speed = Math.max(0, Math.min(MAX_SPEED, S.speed - 9.8 * slopeAt(S.dist) * 0.45 * dt));
+    } else if (mode === 'intro') {
+      S.introT += dt;
+      S.speed = 4;                             // sale andando despacio de Tres Cruces
+      if (S.introT >= INTRO_T) beginPlay();
     } else if (mode === 'ending') {
       S.speed = Math.max(0, S.speed - 12 * dt);
       bus.userData.setBrake(S.speed > 0);
@@ -939,8 +949,7 @@
     // Parado casi no se puede mover de costado (un ómnibus no hace "strafe").
     // Donde la ruta se angosta (fin de la Interbalnearia), el ómnibus vuelve a la calzada.
     // Al terminar el desvío de la estación, vuelve solo a la ruta.
-    const lanesNow = busLanes();
-    S.targetX = Math.max(lanesNow[0], Math.min(lanesNow[lanesNow.length - 1], S.targetX));
+    S.targetX = clampX(S.targetX);
     const err = S.targetX - S.busX;
     const steer = Math.min(1, 0.2 + S.speed / 14);
     const want = Math.max(-LAT_MAX, Math.min(LAT_MAX, err * 1.6)) * steer;
@@ -1024,6 +1033,22 @@
     if (portrait) Bend.at(-20, S.camX + rand(-sh, sh), 10.5 + rand(-sh, sh), camera.position);
     else Bend.at(-18, S.camX + rand(-sh, sh), 8.6 + rand(-sh, sh), camera.position);
     camera.lookAt(Bend.at(portrait ? 18 : 24, S.camX * 1.1, portrait ? -2 : 1, _look));
+    if (mode === 'intro') {
+      // De adelante a la derecha (vista de tres cuartos, lejos) hasta la cámara de siempre.
+      // Gira alrededor del ómnibus a distancia (no pasa cerca) y al final se funde con la cámara normal.
+      const t = Math.min(1, S.introT / INTRO_T);
+      const k = t * t * (3 - 2 * t);
+      const a = (55 + 125 * k) * Math.PI / 180;               // 55° (adelante a la derecha) → 180° (atrás)
+      const r = (portrait ? 20 : 18) + 2 * Math.sin(k * Math.PI);
+      const y = 4 + ((portrait ? 10.5 : 8.6) - 4) * k;
+      Bend.at(r * Math.cos(a), S.busX + r * Math.sin(a), y, _introPos);
+      Bend.at(-1, S.busX, 1.8, _introLook);
+      const f = Math.max(0, (t - 0.7) / 0.3);                  // último tramo: se pega a la cámara de siempre
+      _introPos.lerp(camera.position, f);
+      _introLook.lerp(_look, f * f);
+      camera.position.copy(_introPos);
+      camera.lookAt(_introLook);
+    }
     sky.position.copy(camera.position);
 
     if (mode === 'play' || mode === 'ending') updateHud();
@@ -1231,13 +1256,14 @@
     for (const s of S.stops) {
       if (!s.spawned || s.done || s.missed) continue;
       const dz = S.dist - s.pos;          // + = el ómnibus ya pasó el centro de la parada
-      const inLane = Math.abs(S.busX - LANE_X[RIGHT]) < 0.5;
-      // Se puede frenar un poco pasado de la parada: suben igual, pero caminan más y se quejan
-      // (un poco de confort según cuánto te pasaste). Pasado de STOP_OVER, ya no esperan.
-      if (dz > -10 && dz < STOP_OVER && inLane && S.speed <= STOP_SPEED) {
-        const over = Math.max(0, dz - 8);
+      const inLane = inZoneX(LANE_X[RIGHT]);
+      // Sube si alguna parte del ómnibus está sobre la luz (a lo largo y de costado). Se puede frenar
+      // un poco pasado: suben igual, pero caminan más y se quejan (algo de confort según cuánto te
+      // pasaste). Pasado de STOP_OVER, ya no esperan.
+      if (dz > -ZONE_REACH_Z && dz < STOP_OVER && inLane && S.speed <= STOP_SPEED) {
+        const over = Math.max(0, dz - ZONE_REACH_Z);
         if (over > 0) {
-          const k = Math.min(1, over / (STOP_OVER - 8));
+          const k = Math.min(1, over / (STOP_OVER - ZONE_REACH_Z));
           const pen = Math.round(2 + 6 * k);
           S.confort = Math.max(0, S.confort - pen);
           popup(`Te pasaste ${Math.round(over)} m: caminaron hasta el ómnibus (-${pen}% confort)`, '#ffb347');
@@ -1315,8 +1341,8 @@
   }
   // Parado (o casi) junto a las bombas, carga de a poco mientras alcance la plata.
   function checkStation(dt) {
-    const c = stationNear(S.dist, STATION.pumpHalf);
-    const atPump = c !== undefined && Math.abs(S.busX - STATION.laneX) < 0.9 && S.speed < 1.5;
+    const c = stationNear(S.dist, STATION.pumpHalf + 6);
+    const atPump = c !== undefined && inZoneX(STATION.laneX) && S.speed < 1.5;
     const was = S.fueling;
     S.fueling = false;
     if (!atPump || S.fuel >= 99.9) {
@@ -1649,7 +1675,7 @@
       const d = next.pos - S.dist;
       if (d < M_PER_KM * 4) {   // aviso con tiempo: frenar un ómnibus lleva ~40 m
         const inZone = next.zone && Math.abs(next.zone.position.z) < 14;
-        if (inZone && Math.abs(S.busX - LANE_X[RIGHT]) >= 0.5) msg = '¡CARRIL DERECHO! ▶';
+        if (inZone && !inZoneX(LANE_X[RIGHT])) msg = '¡CARRIL DERECHO! ▶';
         else if (inZone && S.speed > STOP_SPEED) msg = '¡FRENÁ donde brilla el piso!  (20 km/h o menos)';
         else msg = `${next.name} en ${realM(d)} m · frená en la luz, carril derecho`;
       }
@@ -1808,9 +1834,25 @@
     }
     drawProgress();
     meter.frames = 0; meter.time = 0; meter.settle = 1.5;
+    // Mini cinemática: la cámara arranca adelante y al costado del ómnibus (lejos: de cerca se notan
+    // los defectos del modelo) y en INTRO_T segundos se acomoda detrás. Se salta tocando o con una tecla.
+    mode = 'intro';
+    S.introT = 0;
+    S.speed = 4;
+    show('hud', false); show('touch', false); show('bPause', false);
+    $('cine').classList.add('on');
+  }
+
+  const INTRO_T = 3.2;
+  function beginPlay() {
+    if (mode !== 'intro') return;
     mode = 'play';
+    $('cine').classList.remove('on');
+    show('hud', true); show('touch', touchUI); show('bPause', touchUI);
+    if (control === 'tilt') tilt.calib = true;    // se centra al empezar a manejar, no al salir del título
     toast(`¡Buen viaje!<br>Destino: ${R.dest}`, '#ffffff');
   }
+  const skipIntro = () => { if (mode === 'intro') S.introT = INTRO_T; };
 
   let canLeave = false;
   function showResult(arrived) {
@@ -1912,7 +1954,14 @@
   // y al soltar se queda donde está (también entre dos carriles).
   const TAP_TIME = 0.22;                // más que esto apretado ya es "mantener"
   const steer = { dir: 0, held: 0 };
-  const clampX = (x) => { const l = busLanes(); return Math.max(l[0], Math.min(l[l.length - 1], x)); };
+  // Se puede ir por donde quiera: entre carriles y un poco sobre las banquinas (BANQUINA m más allá
+  // del primer y del último carril posible).
+  const BANQUINA = 1.2;
+  const clampX = (x) => {
+    const l = busLanes(), last = l[l.length - 1];
+    // En el desvío de la estación no hay banquina: a la derecha están las bombas.
+    return Math.max(l[0] - BANQUINA, Math.min(last === STATION.laneX ? last : last + BANQUINA, x));
+  };
 
   function nextLaneX(x, dir) {
     const lanes = busLanes();
@@ -1920,26 +1969,26 @@
     return [...lanes].reverse().find((l) => l < x - 0.4) ?? lanes[0];
   }
 
+  // Dirección libre (pedido de José): mientras se aprieta la flecha el ómnibus se mueve hacia ese lado
+  // y al soltar se queda donde está, sin saltar solo a un carril.
   function steerPress(dir) {
     if (mode !== 'play' || paused) return;
     steer.dir = dir;
     steer.held = 0;
-    S.targetX = nextLaneX(S.targetX, dir);
+    S.targetX = clampX(S.busX + dir * 1.2);
   }
 
   function steerRelease(dir) {
     if (steer.dir !== dir) return;
-    if (steer.held > TAP_TIME && mode === 'play') {
-      // Se frena el movimiento lateral donde soltó, con un poco de anticipación por la inercia.
-      S.targetX = clampX(S.busX + S.latV * 0.35);
-    }
+    // Se frena el movimiento lateral donde soltó, con un poco de anticipación por la inercia.
+    if (mode === 'play') S.targetX = clampX(S.busX + S.latV * 0.35);
     steer.dir = 0;
   }
 
   function updateSteer(dt) {
     if (!steer.dir) return;
     steer.held += dt;
-    if (steer.held > TAP_TIME) S.targetX = clampX(S.busX + steer.dir * 1.2);
+    S.targetX = clampX(S.busX + steer.dir * 1.2);
   }
 
   // ---------- Jugador: nombre y empresa ----------
@@ -2102,7 +2151,7 @@
       S.targetX = clampX(base + v * 4.5 * dt);
       tilt.idle = 0;
     } else if ((tilt.idle += dt) > 0.25) {
-      S.targetX = nearestLane(S.busX + S.latV * 0.3);
+      S.targetX = clampX(S.busX + S.latV * 0.3);         // derecho: se queda donde está
     }
     // El volante dibujado gira como el celular.
     const r = Math.round(Math.max(-90, Math.min(90, a)));
@@ -2183,6 +2232,7 @@
   // Los botones en pantalla solo aparecen en dispositivos táctiles.
   let touchUI = window.matchMedia('(pointer: coarse)').matches;
   window.addEventListener('pointerdown', (e) => {
+    if (mode === 'intro' && e.target.closest && !e.target.closest('#titleScreen')) skipIntro();
     if (e.pointerType === 'touch' && !touchUI) {
       touchUI = true;
       if (mode === 'play') { show('touch', true); show('bPause', true); }
@@ -2201,6 +2251,7 @@
     if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
     else if (e.code === 'KeyR' && paused && mode === 'play') restartTrip();
     const confirm = e.code === 'Space' || e.code === 'Enter';
+    if (mode === 'intro') { skipIntro(); return; }
     if (mode === 'title' && e.code === 'KeyO') cycleSkin();
     if (confirm && mode === 'title') startGame();
     else if (confirm && mode === 'result' && canLeave) leaveResult();
