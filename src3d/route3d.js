@@ -6,7 +6,8 @@
 //          'r9' = Ruta 9 (1 carril por sentido, línea amarilla al centro): para pasar a un camión
 //                 hay que salir al carril de los que vienen de frente.
 // biomes: paisaje por zonas. weights: qué tan seguido aparece cada decoración (0 = nunca, 4 = mucho;
-//         más de 4 = todavía más, como los palmares de butiá).
+//         más de 4 = todavía más, como los palmares de butiá). shop = comercios (1 y 2 plantas) y
+//         building = edificios de 3 a 5 pisos: van sobre la ruta, con el frente hacia el ómnibus.
 //         lights: columnas de alumbrado (zonas pobladas). monte: árboles tupidos pegados al alambrado.
 //         forest: densidad del bosque extra fuera de las ciudades (0 a 1, por defecto 1).
 // landmarks: locality (cartel azul en ménsula; icon: town, beach, plane, fort), arroyo (cartel azul
@@ -29,21 +30,21 @@ const ROUTES3D = [
     real: [0, 97.1],        // la 152I deja la Interbalnearia en Pan de Azúcar y sigue por Ruta 9
     biomes: [
       { from: 0, to: 30, name: 'Ciudad de la Costa', lights: true,
-        weights: { house: 4, tree: 2, umbrellaPine: 2, eucalyptus: 1, pine: 1, bush: 2, palm: 1, cow: 0 } },
+        weights: { shop: 3, building: 2.5, house: 3, tree: 2, umbrellaPine: 2, eucalyptus: 1, pine: 1, bush: 2, palm: 1, cow: 0 } },
       { from: 30, to: 52, name: 'Costa de Oro', lights: false,
-        weights: { umbrellaPine: 4, eucalyptus: 3, pine: 2, house: 1.5, tree: 1, bush: 1, palm: 0.5, cow: 0.5 } },
+        weights: { umbrellaPine: 4, eucalyptus: 3, pine: 2, house: 1.5, shop: 0.4, tree: 1, bush: 1, palm: 0.5, cow: 0.5 } },
       { from: 52, to: 59, name: 'Montes de la Costa de Oro', lights: false, monte: true,
         weights: { pine: 4, eucalyptus: 4, umbrellaPine: 3, tree: 2, bush: 2 } },
       { from: 59, to: 66, name: 'Costa de Oro', lights: false,
-        weights: { umbrellaPine: 4, eucalyptus: 3, pine: 2, house: 1.5, tree: 1, bush: 1, palm: 0.5, cow: 0.5 } },
+        weights: { umbrellaPine: 4, eucalyptus: 3, pine: 2, house: 1.5, shop: 0.4, tree: 1, bush: 1, palm: 0.5, cow: 0.5 } },
       { from: 66, to: 72, name: 'Montes de la Costa de Oro', lights: false, monte: true,
         weights: { eucalyptus: 4, pine: 3, tree: 3, umbrellaPine: 2, bush: 2 } },
       { from: 72, to: 78, name: 'Costa de Oro', lights: false,
-        weights: { umbrellaPine: 4, eucalyptus: 3, pine: 2, house: 1.5, tree: 1, bush: 1, palm: 0.5, cow: 0.5 } },
+        weights: { umbrellaPine: 4, eucalyptus: 3, pine: 2, house: 1.5, shop: 0.4, tree: 1, bush: 1, palm: 0.5, cow: 0.5 } },
       { from: 78, to: 94, name: 'Sierras de Maldonado', lights: false,
         weights: { cow: 4, eucalyptus: 2.5, tree: 1.5, bush: 2, pine: 1, umbrellaPine: 0.5, house: 0.3, palm: 0 } },
       { from: 94, to: 999, name: 'Pan de Azúcar', lights: true,
-        weights: { house: 4, tree: 2, eucalyptus: 1.5, bush: 1.5, cow: 0.5 } }
+        weights: { shop: 3, building: 1.5, house: 3, tree: 2, eucalyptus: 1.5, bush: 1.5, cow: 0.5 } }
     ],
     landmarks: [
       { km: 25, type: 'locality', text: 'Ciudad de la Costa' },
@@ -81,13 +82,13 @@ const ROUTES3D = [
       { from: 119, to: 133, name: 'Campo de Maldonado', lights: false,
         weights: { cow: 4, eucalyptus: 3, tree: 2, bush: 2, house: 0.6, pine: 0.5 } },
       { from: 133, to: 142, name: 'San Carlos', lights: true,
-        weights: { house: 4, tree: 2, eucalyptus: 1.5, bush: 2, palm: 1, pine: 0.5, cow: 0 } },
+        weights: { shop: 3.5, building: 2, house: 3, tree: 2, eucalyptus: 1.5, bush: 2, palm: 1, pine: 0.5, cow: 0 } },
       { from: 142, to: 172, name: 'Campo de Maldonado', lights: false,
         weights: { cow: 4, eucalyptus: 3, tree: 2, bush: 2, house: 0.4, butia: 0.3 } },
       { from: 172, to: 200, name: 'Campo de Rocha', lights: false,
         weights: { cow: 3, butia: 2, bush: 2, eucalyptus: 2, reeds: 1.5, pond: 0.8, tree: 1, house: 0.3 } },
       { from: 200, to: 999, name: 'Rocha', lights: true,
-        weights: { house: 4, tree: 2, eucalyptus: 1.5, bush: 1.5, palm: 1, butia: 0.5 } }
+        weights: { shop: 3.5, building: 2.5, house: 3, tree: 2, eucalyptus: 1.5, bush: 1.5, palm: 1, butia: 0.5 } }
     ],
     landmarks: [
       { km: 135.5, type: 'locality', text: 'San Carlos' },
@@ -114,13 +115,13 @@ const ROUTES3D = [
     real: [210.5, 342.2],
     biomes: [
       { from: 0, to: 220, name: 'Rocha', lights: true,
-        weights: { house: 4, tree: 2, eucalyptus: 1.5, bush: 1.5, palm: 1, butia: 0.5 } },
+        weights: { shop: 3.5, building: 2.5, house: 3, tree: 2, eucalyptus: 1.5, bush: 1.5, palm: 1, butia: 0.5 } },
       { from: 220, to: 248, name: 'Campo de Rocha', lights: false,
         weights: { cow: 4, eucalyptus: 2.5, butia: 1.5, bush: 2, tree: 1, reeds: 1, house: 0.3 } },
       { from: 248, to: 259, name: 'Palmares de Castillos', lights: false, forest: 0.3,
         weights: { butia: 9, cow: 2, bush: 1, reeds: 0.6 } },
       { from: 259, to: 265, name: 'Castillos', lights: true,
-        weights: { house: 4, butia: 2, tree: 1.5, palm: 1, bush: 1 } },
+        weights: { shop: 3, building: 1, house: 3, butia: 2, tree: 1.5, palm: 1, bush: 1 } },
       { from: 265, to: 282, name: 'Palmares de Castillos', lights: false, forest: 0.3,
         weights: { butia: 9, cow: 2, bush: 1, reeds: 0.6 } },
       { from: 282, to: 300, name: 'Bañados del Este', lights: false, forest: 0.25,
@@ -130,7 +131,7 @@ const ROUTES3D = [
       { from: 312, to: 330, name: 'Laguna Negra', lights: false, forest: 0.5,
         weights: { reeds: 3, butia: 2, pond: 1.5, bush: 1.5, cow: 1 } },
       { from: 330, to: 999, name: 'Chuy', lights: true,
-        weights: { house: 4, tree: 2, bush: 1.5, palm: 1, butia: 0.5 } }
+        weights: { shop: 4, building: 3, house: 2.5, tree: 2, bush: 1.5, palm: 1, butia: 0.5 } }
     ],
     landmarks: [
       { km: 236.5, type: 'arroyo', name: 'Aº Chafalote' },

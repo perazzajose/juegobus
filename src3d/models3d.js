@@ -139,7 +139,131 @@ const Models3D = (() => {
         sizes[node.name] = b.size;
       });
     }));
-    return Promise.all(jobs).then(() => { ready = true; });
+    return Promise.all(jobs).then(() => { makeBuildings(); ready = true; });
+  }
+
+  // ---------- Edificios y comercios de las ciudades (hechos por código) ----------
+  // Cada edificio es UNA geometría con UN material (colores por vértice + textura de ventanas), así
+  // que con InstancedMesh cada modelo es un solo dibujo, liviano para celulares de gama media.
+  // El frente mira a +Z (game3d.js lo gira hacia la ruta). Las fachadas repiten una ventana por cada
+  // "módulo" de BAY × FLOOR metros; las piezas lisas (marquesinas, carteles, balcones) leen la
+  // esquina de la textura, que es pared blanca.
+  const BAY = 3, FLOOR = 3;
+  let facadeTex = null;
+  function windowTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;                          // potencia de 2: repite bien también en WebGL 1
+    const g = c.getContext('2d');
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#d9d4cc'; g.fillRect(14, 50, 36, 4); // alféizar
+    g.fillStyle = '#2b3946'; g.fillRect(18, 18, 28, 32); // vidrio
+    g.fillStyle = '#5d7488'; g.fillRect(18, 18, 28, 9);  // reflejo del cielo
+    g.fillStyle = '#e8e4dc'; g.fillRect(31, 18, 2, 32);  // parante
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 2;
+    return t;
+  }
+
+  // Arma la geometría de a pedazos: cajas lisas (con color) y fachadas con ventanas.
+  function geoBuilder() {
+    const pos = [], nrm = [], uv = [], col = [];
+    const tmp = new THREE.Color();
+    const quad = (p0, p1, p2, p3, n, uvs, color) => {
+      tmp.set(color);
+      [[p0, uvs[0]], [p1, uvs[1]], [p2, uvs[2]], [p0, uvs[0]], [p2, uvs[2]], [p3, uvs[3]]].forEach(([p, t]) => {
+        pos.push(p[0], p[1], p[2]); nrm.push(n[0], n[1], n[2]); uv.push(t[0], t[1]); col.push(tmp.r, tmp.g, tmp.b);
+      });
+    };
+    const FLAT = [[0.04, 0.04], [0.04, 0.04], [0.04, 0.04], [0.04, 0.04]];
+    // Caja lisa con centro en x/z y base en y. noBottom: sin la cara de abajo (no se ve nunca).
+    function box(w, h, d, x, y, z, color) {
+      const a = x - w / 2, b = x + w / 2, y0 = y, y1 = y + h, f = z + d / 2, k = z - d / 2;
+      quad([a, y0, f], [b, y0, f], [b, y1, f], [a, y1, f], [0, 0, 1], FLAT, color);
+      quad([b, y0, k], [a, y0, k], [a, y1, k], [b, y1, k], [0, 0, -1], FLAT, color);
+      quad([b, y0, f], [b, y0, k], [b, y1, k], [b, y1, f], [1, 0, 0], FLAT, color);
+      quad([a, y0, k], [a, y0, f], [a, y1, f], [a, y1, k], [-1, 0, 0], FLAT, color);
+      quad([a, y1, f], [b, y1, f], [b, y1, k], [a, y1, k], [0, 1, 0], FLAT, color);
+    }
+    // Paredes con ventanas (4 lados), de y a y + floors pisos. sides: qué lados llevan ventanas.
+    function facade(w, d, x, y, z, floors, color, sides = { f: 1, b: 1, l: 1, r: 1 }) {
+      const a = x - w / 2, b = x + w / 2, y0 = y, y1 = y + floors * FLOOR, f = z + d / 2, k = z - d / 2;
+      const uw = (len, on) => (on ? Math.max(1, Math.round(len / BAY)) : 0.04);
+      const vv = on => (on ? floors : 0.04);
+      const U = (len, on) => { const u = uw(len, on), v = vv(on); return on ? [[0, 0], [u, 0], [u, v], [0, v]] : FLAT; };
+      quad([a, y0, f], [b, y0, f], [b, y1, f], [a, y1, f], [0, 0, 1], U(w, sides.f), color);
+      quad([b, y0, k], [a, y0, k], [a, y1, k], [b, y1, k], [0, 0, -1], U(w, sides.b), color);
+      quad([b, y0, f], [b, y0, k], [b, y1, k], [b, y1, f], [1, 0, 0], U(d, sides.r), color);
+      quad([a, y0, k], [a, y0, f], [a, y1, f], [a, y1, k], [-1, 0, 0], U(d, sides.l), color);
+    }
+    function build() {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      geo.computeBoundingBox();
+      geo.computeBoundingSphere();
+      return geo;
+    }
+    return { box, facade, build };
+  }
+
+  // Planta baja de comercio: pared, vidriera, puerta, marquesina y cartel con el color del local.
+  function shopFront(B, w, d, wall, brand, awning, h = 3.4) {
+    B.box(w, h, d, 0, 0, 0, wall);
+    B.box(w * 0.62, 2.3, 0.08, -w * 0.12, 0.35, d / 2 + 0.04, 0x2b3946);     // vidriera
+    B.box(1.1, 2.3, 0.08, w * 0.34, 0, d / 2 + 0.04, 0x4a3324);              // puerta
+    B.box(w + 0.2, 0.12, 1.5, 0, 2.75, d / 2 + 0.75, awning);                // marquesina
+    B.box(w + 0.2, 0.35, 0.08, 0, 2.5, d / 2 + 1.5, awning);                 // faldón
+    B.box(w * 0.8, 0.55, 0.1, 0, 2.95, d / 2 + 0.05, brand);                 // cartel
+  }
+
+  function makeBuildings() {
+    facadeTex = facadeTex || windowTexture();
+    const mat = new THREE.MeshStandardMaterial({ map: facadeTex, vertexColors: true, roughness: 0.9, metalness: 0 });
+    const add = (key, fn) => {
+      const B = geoBuilder();
+      fn(B);
+      const geo = B.build();
+      parts[key] = [{ geo, mat, name: key }];
+      sizes[key] = geo.boundingBox.getSize(new THREE.Vector3());
+    };
+    // Almacenes y comercios de una planta, techo plano con pretil.
+    [['shopA', 0xf2c27b, 0xc62828, 0x2e7d32], ['shopB', 0x9ccbe0, 0x1565c0, 0xf9a825],
+     ['shopC', 0xe8a48a, 0x6a1b9a, 0xd84315], ['shopD', 0xffffff, 0x00897b, 0x37474f]].forEach(([key, wall, brand, awning], i) => {
+      add(key, (B) => {
+        const w = 8 + i, d = 10;
+        shopFront(B, w, d, wall, brand, awning);
+        B.box(w, 0.6, d, 0, 3.4, 0, wall);                                      // pretil
+        B.box(w - 0.6, 0.05, d - 0.6, 0, 3.42, 0, 0x8d8d8d);                    // azotea
+      });
+    });
+    // Dos plantas: comercio abajo y vivienda arriba con balcón.
+    [['bldg2a', 0xe6b98f, 0xd32f2f, 0x455a64], ['bldg2b', 0xbfd8b8, 0x283593, 0xef6c00]].forEach(([key, wall, brand, awning]) => {
+      add(key, (B) => {
+        const w = 9, d = 11;
+        shopFront(B, w, d, wall, brand, awning);
+        B.facade(w, d, 0, 3.4, 0, 1, wall);
+        B.box(w * 0.6, 0.15, 1.1, 0, 3.4, d / 2 + 0.55, 0xcfcfcf);              // balcón
+        B.box(w * 0.6, 0.9, 0.06, 0, 3.55, d / 2 + 1.07, 0x37474f);             // baranda
+        B.box(w, 0.7, d, 0, 6.4, 0, wall);                                      // pretil
+      });
+    });
+    // Edificios de apartamentos de 3 y 5 pisos (frentes de las avenidas y centros).
+    [['bldg3', 3, 0xe8e0d0, 12, 12], ['bldg5', 5, 0xd6dde3, 13, 14], ['bldg4', 4, 0xd99a7a, 11, 12]].forEach(([key, floors, wall, w, d]) => {
+      add(key, (B) => {
+        B.facade(w, d, 0, 0, 0, floors, wall);
+        B.box(2.2, 2.6, 0.1, 0, 0, d / 2 + 0.05, 0x3e2f24);                     // entrada
+        for (let f = 1; f < floors; f++) {
+          B.box(w - 1, 0.15, 1.2, 0, f * FLOOR, d / 2 + 0.6, 0xe0e0e0);         // balcón corrido
+          B.box(w - 1, 0.95, 0.06, 0, f * FLOOR + 0.15, d / 2 + 1.17, 0x90a4ae); // baranda de vidrio
+        }
+        B.box(w, 0.5, d, 0, floors * FLOOR, 0, wall);                           // pretil
+        B.box(3, 1.6, 2.2, w * 0.2, floors * FLOOR + 0.5, -d * 0.15, 0xbdbdbd); // sala de máquinas / tanque
+      });
+    });
   }
 
   const has = (key) => ready && !!parts[key];

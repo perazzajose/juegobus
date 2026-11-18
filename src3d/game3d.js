@@ -302,22 +302,61 @@
       if (ranges[-1][1] >= ranges[-1][0]) side = -1;
       else { d.userData.pos = pos; d.userData.biomeOK = false; d.visible = false; return; }
     }
+    // Comercios y edificios: sobre la ruta, con el frente hacia el ómnibus, en una franja angosta
+    // (como las cuadras que dan a la Interbalnearia o a la Ruta 9 al pasar por los pueblos).
+    if (URBAN[t]) {
+      const deep = d.userData.model && Models3D.size(d.userData.model) ? Models3D.size(d.userData.model).z : 12;
+      const a = ranges[side][0] + deep / 2 - 1, b = Math.min(ranges[side][1], a + 9);
+      d.userData.pos = pos;
+      d.position.x = side * rand(a, Math.max(a, b));
+      d.rotation.y = -side * Math.PI / 2;
+      d.scale.setScalar(1);
+      d.userData.biomeOK = Math.random() < Math.min(1, (bio.weights[t] || 0) / 4) && b >= a && !clashes(d);
+      d.visible = d.userData.biomeOK && decoShown(d);
+      return;
+    }
     const [a, b] = ranges[side];
     d.userData.pos = pos;
     d.position.x = side * rand(a, Math.max(a, b));
     d.rotation.y = t === 'house' ? pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]) : rand(0, Math.PI * 2);
     d.scale.setScalar(t === 'house' ? 1 : rand(0.8, 1.25));
     const w = bio.monte && woody ? 1 : Math.min(1, (bio.weights[t] || 0) / 4);
-    d.userData.biomeOK = Math.random() < w && ranges[side][1] >= ranges[side][0];
+    d.userData.biomeOK = Math.random() < w && ranges[side][1] >= ranges[side][0] && !(bio.lights && clashes(d));
     d.visible = d.userData.biomeOK && decoShown(d);
+  }
+
+  // En las ciudades nada se pisa con casas, comercios ni edificios: si el lugar está ocupado, no se muestra.
+  // footprint: [medio largo a lo largo de la ruta, medio ancho hacia el costado].
+  function footprint(d) {
+    const s = d.userData.model && Models3D.size(d.userData.model);
+    if (!s) return [5, 5];
+    const turned = Math.abs(Math.sin(d.rotation.y)) > 0.5;
+    return turned ? [s.z / 2, s.x / 2] : [s.x / 2, s.z / 2];
+  }
+  function clashes(d) {
+    // Las casas y los edificios se cuidan entre sí; árboles y demás solo se apartan de los edificios.
+    const solid = d.userData.type === 'house' || URBAN[d.userData.type];
+    const [l, w] = solid ? footprint(d) : [1.5, 1.5];
+    for (const o of decos) {
+      if (o === d || !o.userData.biomeOK || o.userData.forest) continue;
+      const t = o.userData.type;
+      if (!URBAN[t] && !(solid && t === 'house')) continue;
+      const [ol, ow] = footprint(o);
+      if (Math.abs(o.userData.pos - d.userData.pos) < l + ol + 1 && Math.abs(o.position.x - d.position.x) < w + ow + 1) return true;
+    }
+    return false;
   }
 
   // Tipos de decoración que usan modelos del pack (variantes). Se dibujan con InstancedMesh: cada
   // árbol o casa es un objeto liviano (sin malla) y todas las copias de un modelo van en un solo dibujo.
   const DECO_MODELS = {
     tree: ['tree1', 'tree2'], eucalyptus: ['tree3'], pine: ['pine1', 'pine3'],
-    house: ['house1', 'house2', 'house3', 'house4', 'house5']
+    house: ['house1', 'house2', 'house3', 'house4', 'house5'],
+    // Hechos por código en models3d.js: comercios de una planta y edificios de 2 a 5 pisos.
+    shop: ['shopA', 'shopB', 'shopC', 'shopD', 'bldg2a', 'bldg2b'],
+    building: ['bldg3', 'bldg4', 'bldg2a', 'bldg5', 'bldg3', 'bldg2b']
   };
+  const URBAN = { shop: true, building: true };
   const modelVariants = (t) => (DECO_MODELS[t] || []).filter((k) => Models3D.has(k));
   // Bosque fuera de las ciudades (aparte de la decoración de cada zona). Con "distancia corta" se ve la mitad.
   // Sobre todo el pino liviano (pine1, ~1.600 triángulos); los demás tienen el doble. Sin sombras.
