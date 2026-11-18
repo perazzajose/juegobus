@@ -4,6 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>BUSGAME</title>
+  <script>
+    // Si el navegador tenía guardada una versión vieja de esta página, se recarga sola con la nueva.
+    // version.js se pide siempre fresco (con la hora en la dirección); con doble clic es la misma versión.
+    window.BUILD = '20261118-4';
+    document.write('<script src="version.js?t=' + Date.now() + '"><\/script>');
+  </script>
+  <script>
+    (function () {
+      if (!window.LATEST || window.LATEST === window.BUILD) return;
+      try {
+        var k = 'busgame-recarga-' + window.LATEST;
+        if (sessionStorage.getItem(k)) return;          // una sola vez (si el servidor tarda, no hay bucle)
+        sessionStorage.setItem(k, '1');
+        var q = new URLSearchParams(location.search);
+        q.set('b', window.LATEST);
+        location.replace(location.pathname + '?' + q.toString() + location.hash);
+      } catch (e) { /* sin sessionStorage: se sigue con lo que hay */ }
+    })();
+  </script>
   <style>
     :root { --brand: #1b4f9c; --accent: #f2b705; --ink: #10202a; --panel: rgba(13, 27, 42, 0.86);
       --good: #3fbf5f; --bad: #e0453a; --text: #ffffff; --muted: #cfe0f5; }
@@ -327,26 +346,26 @@
     })();
   </script>
   <!-- Versión de los scripts (?v=): cambiarla en cada subida para que el navegador no mezcle archivos viejos y nuevos. -->
-  <script src="lib/three.bundle.min.js?v=20261118-3"></script>
-  <script src="src3d/bend3d.js?v=20261118-3"></script>
-  <script src="src3d/ambiente3d.js?v=20261118-3"></script>
-  <script src="data/ruta-mvd-chuy.js?v=20261118-3"></script>
-  <script src="src3d/rutaReal.js?v=20261118-3"></script>
-  <script src="src/sound.js?v=20261118-3"></script>
-  <script src="src/rankingConfig.js?v=20261118-3"></script>
-  <script src="src/ranking.js?v=20261118-3"></script>
-  <script src="src3d/busModel.js?v=20261118-3"></script>
-  <script src="src3d/textures3d.js?v=20261118-3"></script>
-  <script src="src3d/route3d.js?v=20261118-3"></script>
-  <script src="src3d/skins/rutas_del_sol.js?v=20261118-3"></script>
-  <script src="src3d/skins/cynsa.js?v=20261118-3"></script>
-  <script src="src3d/models/nature.js?v=20261118-3"></script>
-  <script src="src3d/models/cars.js?v=20261118-3"></script>
-  <script src="src3d/models/houses.js?v=20261118-3"></script>
-  <script src="src3d/models/letters.js?v=20261118-3"></script>
-  <script src="src3d/models3d.js?v=20261118-3"></script>
-  <script src="src3d/skins/cot_mejorada.js?v=20261118-3"></script>
-  <script src="src3d/world3d.js?v=20261118-3"></script>
-  <script src="src3d/game3d.js?v=20261118-3"></script>
+  <script src="lib/three.bundle.min.js?v=20261118-4"></script>
+  <script src="src3d/bend3d.js?v=20261118-4"></script>
+  <script src="src3d/ambiente3d.js?v=20261118-4"></script>
+  <script src="data/ruta-mvd-chuy.js?v=20261118-4"></script>
+  <script src="src3d/rutaReal.js?v=20261118-4"></script>
+  <script src="src/sound.js?v=20261118-4"></script>
+  <script src="src/rankingConfig.js?v=20261118-4"></script>
+  <script src="src/ranking.js?v=20261118-4"></script>
+  <script src="src3d/busModel.js?v=20261118-4"></script>
+  <script src="src3d/textures3d.js?v=20261118-4"></script>
+  <script src="src3d/route3d.js?v=20261118-4"></script>
+  <script src="src3d/skins/rutas_del_sol.js?v=20261118-4"></script>
+  <script src="src3d/skins/cynsa.js?v=20261118-4"></script>
+  <script src="src3d/models/nature.js?v=20261118-4"></script>
+  <script src="src3d/models/cars.js?v=20261118-4"></script>
+  <script src="src3d/models/houses.js?v=20261118-4"></script>
+  <script src="src3d/models/letters.js?v=20261118-4"></script>
+  <script src="src3d/models3d.js?v=20261118-4"></script>
+  <script src="src3d/skins/cot_mejorada.js?v=20261118-4"></script>
+  <script src="src3d/world3d.js?v=20261118-4"></script>
+  <script src="src3d/game3d.js?v=20261118-4"></script>
 </body>
 </html>
