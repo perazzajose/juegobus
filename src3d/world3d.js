@@ -1417,6 +1417,66 @@ totalEmissiveRadiance += headMask * vec3(0.6);`);
     return mat;
   }
 
+  // Ómnibus del tránsito (los que vienen de frente), con la librea de una empresa. Copia el del
+  // jugador compartiendo las geometrías (no se vuelve a leer el modelo) y le da materiales propios que
+  // SÍ se deforman con las curvas (bend3d.js): el del jugador está quieto en d = 0 y no se deforma,
+  // pero estos andan por la ruta. Una librea por skin (se reusa entre todos los ómnibus de esa empresa).
+  const bentMats = new Map();
+  const trafficLiveries = {};
+  const bendCompile = THREE.Material.prototype.onBeforeCompile;
+  function bent(m) {
+    if (!bentMats.has(m)) {
+      const c = m.clone();
+      c.onBeforeCompile = bendCompile;
+      bentMats.set(m, c);
+    }
+    return bentMats.get(m);
+  }
+  function trafficLivery(id, len, info) {
+    if (trafficLiveries[id]) return trafficLiveries[id];
+    const body = liveryMaterial(len);
+    const own = body.onBeforeCompile;
+    body.onBeforeCompile = function (sh, r) { bendCompile.call(this, sh, r); own(sh, r); };
+    body.customProgramCacheKey = () => 'traffic-livery';
+    body.userData.setSkin(id);
+    const hull = body.clone();
+    hull.onBeforeCompile = body.onBeforeCompile;
+    hull.customProgramCacheKey = () => 'traffic-hull';
+    hull.defines = { IS_HULL: 1 };
+    hull.side = THREE.DoubleSide;
+    trafficLiveries[id] = { body, hull, rear: null };
+    // Luneta con el logo de la empresa (como en el del jugador).
+    const skin = SKINS.find((s) => s.id === id) || SKINS[0];
+    trafficLiveries[id].rearMap = () => (skin.available && skin.tex ? rearCropTex(skin, info.rearGlass)
+      : skin.available && skin.logo ? rearGlassTex(skin.logo) : null);
+    return trafficLiveries[id];
+  }
+  function trafficBus(root, liveryMat, id, len, halfW) {
+    const info = (typeof BUS_MODEL_INFO !== 'undefined' && BUS_MODEL_INFO) || {};
+    const lv = trafficLivery(id, len, info);
+    const rearGlass = liveryMat.userData.rearGlass;
+    const g = root.clone();
+    g.userData = { hw: halfW, hl: len / 2, bus: id };
+    g.traverse((o) => {
+      if (!o.isMesh || o.userData.isBlob) return;
+      o.castShadow = true;
+      if (o.material === liveryMat) o.material = lv.body;
+      else if (o.material.defines && o.material.defines.IS_HULL) o.material = lv.hull;
+      else if (rearGlass && o.material === rearGlass) {
+        if (!lv.rear) {
+          lv.rear = bent(rearGlass).clone();
+          lv.rear.onBeforeCompile = bendCompile;
+          lv.rear.map = lv.rearMap();
+          lv.rear.color.set(lv.rear.map ? 0xffffff : 0x0d141c);
+        }
+        o.material = lv.rear;
+      } else o.material = bent(o.material);
+    });
+    // Sin texturas cargadas todavía, la luneta queda oscura (se completa en el próximo ómnibus).
+    if (lv.rear && !lv.rear.map) { lv.rear.map = lv.rearMap(); if (lv.rear.map) { lv.rear.color.set(0xffffff); lv.rear.needsUpdate = true; } }
+    return g;
+  }
+
   // Carga el modelo embebido (BUS_GLB_BASE64). Un modelo genérico se escala a 12 m y se le
   // agregan franjas y logos; uno preparado (BUS_MODEL_INFO.prepared) se usa tal cual con la librea.
   function loadBus(onReady) {
@@ -1463,6 +1523,7 @@ totalEmissiveRadiance += headMask * vec3(0.6);`);
           }
         };
         root.userData.setSkin(SKINS[0].id);
+        root.userData.makeTraffic = (id) => trafficBus(root, liveryMat, id, len, halfW);
         onReady(root);
         return;
       }

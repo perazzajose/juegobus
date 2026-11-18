@@ -653,14 +653,23 @@
   // Los que vienen de frente. Ruta 9: por el carril izquierdo, a veces en fila, a veces con un hueco
   // largo para pasar tranquilo. Interbalnearia: por los dos carriles del otro lado de la doble amarilla.
   // En los dos casos se pueden chocar si el ómnibus va de contramano.
+  const ONCOMING_BUS = 0.18;   // parte de los vehículos de frente que son ómnibus
   function spawnOncoming() {
     const p = S.dist / TRIP_M;
     const at = S.dist + ONCOMING_AHEAD;
     const ib = !twoWay(at);
-    const car = Math.random() < 0.25 ? World3D.makeTruck() : World3D.makeCar(pick(World3D.CAR_COLORS));
+    // De frente también vienen ómnibus de las empresas del juego (COT, Rutas del Sol, CYNSA),
+    // por el carril de la derecha de ellos (el de afuera en la Interbalnearia).
+    const r = Math.random();
+    // Cada ómnibus son ~38 mil triángulos y 9 dibujos: de a uno por vez, y en "muy baja" no salen.
+    const isBus = r < ONCOMING_BUS && bus && bus.userData.makeTraffic && !S.attract &&
+      !GFX_LEVELS[gfx.level].tiny && !S.cars.some((c) => c.userData.bus);
+    const car = isBus ? bus.userData.makeTraffic(pick(COMPANIES).skins[0])
+      : r < ONCOMING_BUS + 0.2 ? World3D.makeTruck() : World3D.makeCar(pick(World3D.CAR_COLORS));
     car.rotation.y = Math.PI;
-    car.position.x = ib ? pick(World3D.ROAD_PROFILES.ib.ONCOMING_LANES) : LANE_X[0];
-    addWorld(car, at, { lane: -1, speed: -rand(19, 24), oncoming: true, ibLane: ib });
+    const lanes = World3D.ROAD_PROFILES.ib.ONCOMING_LANES;
+    car.position.x = !ib ? LANE_X[0] : isBus ? lanes.reduce((a, b) => (Math.abs(b) < Math.abs(a) ? a : b)) : pick(lanes);
+    addWorld(car, at, { lane: -1, speed: isBus ? -rand(22, 25) : -rand(19, 24), oncoming: true, ibLane: ib });
     S.cars.push(car);
     const gap = ib ? rand(70, 170) : Math.random() < 0.3 ? rand(300, 450) : rand(80, 200);
     S.nextOncomingAt = S.dist + gap * (1 - 0.25 * p);
