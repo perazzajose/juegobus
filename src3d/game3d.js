@@ -1799,7 +1799,7 @@
     Object.keys(hudCache).forEach((k) => delete hudCache[k]);
     show('titleScreen', false); show('hud', true); show('touch', touchUI); show('bPause', touchUI);
     $('touch').classList.toggle('tilt', control === 'tilt');
-    $('pauseHint').textContent = touchUI ? 'Tocá para seguir' : 'P para seguir';
+    $('pauseHint').textContent = touchUI ? 'Tocá afuera para seguir' : 'P para seguir · R para reiniciar';
     if (touchUI) goFullscreen();
     if (control === 'tilt') {
       tilt.calib = true;                    // el volante se centra como lo tenga al salir
@@ -1876,6 +1876,26 @@
     paused = !paused;
     show('pauseScreen', paused);
   }
+
+  // Menú de pausa: seguir, reiniciar el viaje (mismo jugador), cambiar nombre/empresa/ómnibus y
+  // reiniciar, o salir al título. Reiniciar no anota nada en el ranking.
+  function restartTrip() {
+    paused = false;
+    show('pauseScreen', false);
+    mode = 'title';                       // startGame espera venir del título
+    startGame();
+  }
+  function pauseMenu(id, fn) {
+    $(id).addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); });
+    $(id).addEventListener('click', (e) => { e.stopPropagation(); if (paused && mode === 'play') { Sfx.click(); fn(); } });
+  }
+  pauseMenu('pResume', togglePause);
+  pauseMenu('pRestart', restartTrip);
+  pauseMenu('pPlayer', () => {
+    show('pauseScreen', false);
+    openPlayer(restartTrip);              // al confirmar, viaje nuevo con el jugador y el ómnibus elegidos
+  });
+  pauseMenu('pQuit', () => { paused = false; goTitle(); });
 
   // Dirección: un toque cambia de carril completo; mantener apretado mueve el ómnibus de a poco
   // y al soltar se queda donde está (también entre dos carriles).
@@ -2168,6 +2188,7 @@
     if (e.code === 'ArrowRight' || e.code === 'KeyD') steerPress(1);
     if (e.code === 'KeyH') Sfx.horn();
     if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+    else if (e.code === 'KeyR' && paused && mode === 'play') restartTrip();
     const confirm = e.code === 'Space' || e.code === 'Enter';
     if (mode === 'title' && e.code === 'KeyO') cycleSkin();
     if (confirm && mode === 'title') startGame();
@@ -2187,7 +2208,8 @@
 
   $('titleScreen').addEventListener('pointerdown', () => { if (mode === 'title') startGame(); });
   $('resultScreen').addEventListener('pointerdown', () => { if (mode === 'result' && canLeave) leaveResult(); });
-  $('pauseScreen').addEventListener('pointerdown', togglePause);
+  // Tocar afuera del menú también sigue (los botones del menú no llegan acá).
+  $('pauseScreen').addEventListener('pointerdown', (e) => { if (e.target === $('pauseScreen')) togglePause(); });
 
   const hold = (el, down, up) => {
     el.addEventListener('pointerdown', (e) => { e.preventDefault(); down(); });

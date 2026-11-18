@@ -113,6 +113,8 @@ La elección se puede cambiar en el título con el botón **CONTROLES**. En el c
 
 ## Controles
 
+**Pausa** (botón II en el celular, P o Esc en la PC): seguir, reiniciar el viaje, cambiar nombre/empresa/ómnibus y reiniciar, o salir al título. En la PC, R reinicia.
+
 | Acción | Teclado | Celular (botones) | Celular (inclinación) |
 |---|---|---|---|
 | Cambiar de carril | tocar ← → (o A / D) | tocar ◀ ▶ | inclinar el celular |

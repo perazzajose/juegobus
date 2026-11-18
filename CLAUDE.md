@@ -105,6 +105,7 @@ py tools/agregar_altura.py data/ruta-mvd-chuy.json
   - **Temblor en vertical (arreglado 18/11/2026):** el giro se calcula como `atan2(-X, hypot(Y, Z))`, que no depende de cuánto esté echado hacia atrás el celular (antes `atan2(-X, Y)` multiplicaba el temblor de la mano con el celular en vertical e inclinado). Filtro por tiempo (`TILT_SMOOTH`) y zona muerta con histéresis (`TILT_HYST`). Probado con sensor simulado (temblor + ruido) a 20°, 55°, 65° y 75° de inclinación: sin temblor y misma respuesta en todos.
   - En iPhone se pide `DeviceMotionEvent.requestPermission()` al tocar el botón. Hace falta https.
 - En el celular: pantalla completa al salir, botón de pausa `#bPause`, pausa automática en `visibilitychange`.
+- **Menú de pausa** (`#pauseScreen`, 18/11/2026): SEGUIR, REINICIAR EL VIAJE (`restartTrip`, no anota en el ranking), CAMBIAR NOMBRE, EMPRESA U ÓMNIBUS (`openPlayer(restartTrip)`) y SALIR AL TÍTULO. En la PC: P sigue, R reinicia. Tocar afuera del menú sigue.
 
 ## Ideas pendientes
 
