@@ -1038,7 +1038,7 @@
       // los defectos del modelo) mirando la ruta por delante, y baja hasta la cámara de siempre.
       const t = Math.min(1, S.introT / INTRO_T);
       const k = t * t * (3 - 2 * t);
-      Bend.at(-42, S.busX + 7, 19, _introPos);
+      Bend.at(-40, S.busX + 13, 19, _introPos);
       Bend.at(22, S.busX, -2, _introLook);
       _introPos.lerp(camera.position, k);
       _introLook.lerp(_look, k);
