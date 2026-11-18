@@ -9,6 +9,7 @@ El README.md describe la jugabilidad, los controles y el sistema de calidad adap
 ## Reglas del proyecto (no romper)
 
 - **Se abre con doble clic, sin servidor ni internet.** Nada de `fetch()` a archivos locales, nada de ES modules (`import`/`export`), nada de npm ni bundler. Todo son `<script src>` clásicos que definen globales (`THREE`, `World3D`, `ROUTE3D`, `RutaReal`…), en el orden de `index.html`.
+- **Versión de los scripts:** todos los `<script src>` de `index.html` llevan `?v=AAAAMMDD-n`. Cambiarla en cada subida (todas juntas): si no, el celular puede mezclar el `index.html` nuevo con un `.js` viejo de la caché (pasó con el menú de pausa: los botones no hacían nada). Con doble clic (`file://`) el `?v=` se ignora y anda igual.
 - Los datos van como `.js` que asigna a `window` (ver `data/ruta-mvd-chuy.js`), nunca como `.json` cargado en tiempo de ejecución.
 - `THREE` es global (r162 + GLTFLoader). **No subir a r163 o más:** desde r163 three.js no anda con WebGL 1, y PCs viejas (Windows 7 de la agencia de COT, 11/11/2026) solo tienen WebGL 1. Bundle armado con esbuild (`three@0.162.0`, entrada `window.THREE = {...THREE, GLTFLoader}`, formato iife). Si no hay WebGL, un script en `index.html` muestra un aviso en vez de quedar en "Cargando…". En los ejemplos de `docs/GUIA-RENDIMIENTO.md` que usan `import ... from 'three'`, usá `THREE.X`.
 - Tiene que andar en PCs modestas: el sistema de calidad adaptativa (`GFX_LEVELS` en `src3d/game3d.js`, meta de 50 FPS) se mantiene y cualquier cosa nueva debe poder degradarse con él.
@@ -105,7 +106,7 @@ py tools/agregar_altura.py data/ruta-mvd-chuy.json
   - **Temblor en vertical (arreglado 18/11/2026):** el giro se calcula como `atan2(-X, hypot(Y, Z))`, que no depende de cuánto esté echado hacia atrás el celular (antes `atan2(-X, Y)` multiplicaba el temblor de la mano con el celular en vertical e inclinado). Filtro por tiempo (`TILT_SMOOTH`) y zona muerta con histéresis (`TILT_HYST`). Probado con sensor simulado (temblor + ruido) a 20°, 55°, 65° y 75° de inclinación: sin temblor y misma respuesta en todos.
   - En iPhone se pide `DeviceMotionEvent.requestPermission()` al tocar el botón. Hace falta https.
 - En el celular: pantalla completa al salir, botón de pausa `#bPause`, pausa automática en `visibilitychange`.
-- **Menú de pausa** (`#pauseScreen`, 18/11/2026): SEGUIR, REINICIAR EL VIAJE (`restartTrip`, no anota en el ranking), CAMBIAR NOMBRE, EMPRESA U ÓMNIBUS (`openPlayer(restartTrip)`) y SALIR AL TÍTULO. En la PC: P sigue, R reinicia. Tocar afuera del menú sigue.
+- **Menú de pausa** (`#pauseScreen`, 18/11/2026; los botones actúan en `pointerup`, con `click` de respaldo, ver `pauseMenu`): SEGUIR, REINICIAR EL VIAJE (`restartTrip`, no anota en el ranking), CAMBIAR NOMBRE, EMPRESA U ÓMNIBUS (`openPlayer(restartTrip)`) y SALIR AL TÍTULO. En la PC: P sigue, R reinicia. Tocar afuera del menú sigue.
 
 ## Ideas pendientes
 

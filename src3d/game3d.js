@@ -1885,9 +1885,20 @@
     mode = 'title';                       // startGame espera venir del título
     startGame();
   }
+  // Se activa al soltar el dedo sobre el botón (pointerup); el click queda para teclado/mouse por si el
+  // pointerup no llega. Nunca dos veces el mismo toque.
   function pauseMenu(id, fn) {
-    $(id).addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); });
-    $(id).addEventListener('click', (e) => { e.stopPropagation(); if (paused && mode === 'play') { Sfx.click(); fn(); } });
+    const el = $(id);
+    let downAt = 0, firedAt = 0;
+    const fire = () => {
+      if (performance.now() - firedAt < 500 || !paused || mode !== 'play') return;
+      firedAt = performance.now();
+      Sfx.click();
+      fn();
+    };
+    el.addEventListener('pointerdown', (e) => { e.stopPropagation(); downAt = performance.now(); });
+    el.addEventListener('pointerup', (e) => { e.stopPropagation(); if (performance.now() - downAt < 1500) fire(); });
+    el.addEventListener('click', (e) => { e.stopPropagation(); fire(); });
   }
   pauseMenu('pResume', togglePause);
   pauseMenu('pRestart', restartTrip);
