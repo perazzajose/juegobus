@@ -124,7 +124,7 @@ La elección se puede cambiar en el título con el botón **CONTROLES**. En el c
 ## Reglas y puntaje
 
 - **Paradas:** en el carril derecho, frená a 20 km/h o menos sobre la zona amarilla. Cada pasajero da 100 puntos. Si se te pasa una parada, perdés 10 % de confort.
-- **Choques:** cada choque resta 30 % de confort. Si el confort llega a 0, el viaje termina.
+- **Choques:** cada choque resta 30 % de confort y cuesta plata de arreglo (auto $ 400, camión $ 700, moto $ 250, isleta del peaje $ 500; si no alcanza, se lleva lo que haya). Si el confort llega a 0, el viaje termina.
 - **Mate:** recupera 15 % de confort. **Encomienda:** da 50 puntos y $ 120.
 - **Plata:** cada pasajero paga $ 180. Salís con $ 600 y el tanque al 70 %.
 - **Gasoil:** un tanque lleno alcanza para un tercio del viaje (hay 8 estaciones). Cargar cuesta $ 20 cada 1 % del tanque; carga mientras alcance la plata. Sin gasoil, el ómnibus se apaga y el viaje termina.

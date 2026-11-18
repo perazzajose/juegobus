@@ -25,6 +25,8 @@
   const FUEL_IDLE = 0.05;               // % por segundo con el motor en marcha (aunque esté parado)
   const FUEL_PRICE = 20;                // $ por cada % del tanque (también en el cartel de la estación)
   const FUEL_RATE = 22;                 // % por segundo que carga la bomba
+  // Arreglos: cada choque cuesta plata según contra qué fue (si no alcanza, se lleva lo que haya).
+  const REPAIR = { car: 400, truck: 700, moto: 250, isleta: 500 };
   const SPAWN_AHEAD = 280;
   // Ruta 9 (un carril por mano): los que van en nuestro sentido van más lento y los de frente
   // aparecen más lejos, porque se acercan rápido.
@@ -186,7 +188,7 @@
     return {
       attract, dist: 0, speed: attract ? 22 : 0, elapsed: 0, score: 0, passengers: 0, boxes: 0, crashes: 0,
       latV: 0, roll: 0, pitch: 0, camX: LANE_X[RIGHT] * 0.75, prevSpeed: attract ? 22 : 0,
-      money: START_MONEY, fuel: START_FUEL, fuelPaid: 0, fueling: false, noMoney: 0, fuelWarn: 0,
+      money: START_MONEY, repairs: 0, fuel: START_FUEL, fuelPaid: 0, fueling: false, noMoney: 0, fuelWarn: 0,
       weather: { rain: 0, fog: 0, event: null, nextAt: attract ? 1e9 : rand(45, 70), fireAt: rand(1200, 2000), flash: 0 },
       confort: 100, invuln: 0, stunned: 0, lane: RIGHT, targetX: LANE_X[RIGHT], busX: LANE_X[RIGHT], shake: 0,
       cars: [], pickups: [],
@@ -1155,13 +1157,18 @@
     }
     S.crashes++;
     S.confort = Math.max(0, S.confort - 30);
+    const u = car && car.userData;
+    const cost = !u ? REPAIR.isleta : u.hl > 4 ? REPAIR.truck : u.hw < 0.6 ? REPAIR.moto : REPAIR.car;
+    const paid = Math.min(cost, S.money);
+    S.money -= paid;
+    S.repairs += paid;
     S.speed *= 0.2;
     S.stunned = 0.5;
     S.invuln = 1.8;
     S.shake = 1;
     Sfx.crash();
     flash();
-    popup('¡CHOQUE!  -30% confort', '#ff6b5e');
+    popup(`¡CHOQUE!  -30% confort · arreglo -$${money(cost)}`, '#ff6b5e');
     if (S.confort <= 0) finish(false);
   }
 
@@ -1547,6 +1554,9 @@
     el.className = 'popup';
     el.textContent = text;
     el.style.color = color;
+    // Si salen varios juntos (choque + encomienda), se apilan en vez de pisarse.
+    const n = document.querySelectorAll('.popup').length;
+    if (n) el.style.marginTop = `${n * 34}px`;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 1300);
   }
@@ -1677,7 +1687,7 @@
     $('rTitle').style.color = arrived ? '#f2b705' : '#ff6b5e';
     // Km recorridos: suma de lo hecho en cada segmento (sin el salto de km de Pan de Azúcar).
     const kmDone = SEGS.reduce((a, g) => a + Math.max(0, Math.min(g.to, kmAt(Math.min(S.dist, g.p1 - 0.01))) - g.from) * (S.dist > g.p0 ? 1 : 0), 0);
-    $('rStats').textContent = `${R.origin} → ${R.dest} · ${kmDone.toFixed(1)} km en ${mins}:${secs} · Paradas ${stopsDone}/${S.stops.length} · Choques ${S.crashes}`;
+    $('rStats').textContent = `${R.origin} → ${R.dest} · ${kmDone.toFixed(1)} km en ${mins}:${secs} · Paradas ${stopsDone}/${S.stops.length} · Choques ${S.crashes}${S.repairs ? ` (arreglos $ ${money(S.repairs)})` : ''}`;
     const rows = [
       [`Pasajeros (${S.passengers} × 100)`, S.passengers * 100],
       [`Encomiendas (${S.boxes} × 50)`, S.boxes * 50]
