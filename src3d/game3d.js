@@ -14,6 +14,7 @@
   const LAT_MAX = 3.0;                  // velocidad lateral máxima (m/s): un cambio de carril tarda ~1,5 s
   const LAT_ACC = 4.5;                  // qué tan rápido gira el volante (m/s²)
   const STOP_SPEED = 9;                 // 20 km/h mostrados
+  const STOP_OVER = 40;                 // m: hasta dónde se puede frenar pasado de la parada (con queja)
   const KMH = 90 / MAX_SPEED;
   const TARGET_TIME = 540;              // el viaje completo dura unos 9 minutos
   // Plata y gasoil: los pasajes y las encomiendas dan plata; el gasoil se gasta andando y se carga
@@ -981,6 +982,7 @@
     updateDecos(dt);
     updateAnims(dt);
     updateWeather(dt);
+    Ambiente.updateZones(performance.now() / 1000);
     // Faros del ómnibus sobre el asfalto (siguen al ómnibus).
     headPool.position.x = S.busX;
     headPool.rotation.y = bus.rotation.y;
@@ -1138,6 +1140,7 @@
       const line = m.pos - STOP_BACK;
       if (front > line + 1.5) {
         m.judged = true;
+        if (m.light !== 'green') learned('semaforo');
         if (m.light === 'red') {
           S.confort = Math.max(0, S.confort - 15);
           S.score = Math.max(0, S.score - 50);
@@ -1217,11 +1220,21 @@
   function checkStops() {
     for (const s of S.stops) {
       if (!s.spawned || s.done || s.missed) continue;
-      const dz = s.zone.position.z;
+      const dz = S.dist - s.pos;          // + = el ómnibus ya pasó el centro de la parada
       const inLane = Math.abs(S.busX - LANE_X[RIGHT]) < 0.5;
-      if (Math.abs(dz) < 10 && inLane && S.speed <= STOP_SPEED) {
+      // Se puede frenar un poco pasado de la parada: suben igual, pero caminan más y se quejan
+      // (un poco de confort según cuánto te pasaste). Pasado de STOP_OVER, ya no esperan.
+      if (dz > -10 && dz < STOP_OVER && inLane && S.speed <= STOP_SPEED) {
+        const over = Math.max(0, dz - 8);
+        if (over > 0) {
+          const k = Math.min(1, over / (STOP_OVER - 8));
+          const pen = Math.round(2 + 6 * k);
+          S.confort = Math.max(0, S.confort - pen);
+          popup(`Te pasaste ${Math.round(over)} m: caminaron hasta el ómnibus (-${pen}% confort)`, '#ffb347');
+        }
         board(s);
-      } else if (dz > 9) {
+        if (S.confort <= 0) finish(false);
+      } else if (dz > STOP_OVER) {
         s.missed = true;
         S.confort = Math.max(0, S.confort - 10);
         Sfx.miss();
@@ -1246,6 +1259,7 @@
       }
       if (!m.checked && dz > -1) {          // el ómnibus está pasando por las cabinas
         m.checked = true;
+        learned('peaje');
         const kmh = Math.round(S.speed * KMH);
         if (kmh > ROUTE3D_COMMON.peajeMaxKmh + 2) {
           S.confort = Math.max(0, S.confort - 10);
@@ -1264,6 +1278,7 @@
 
   function board(s) {
     s.done = true;
+    learned('parada');
     S.passengers += s.waiting;
     S.score += s.waiting * 100;
     S.money += s.waiting * s.fare;
@@ -1295,7 +1310,7 @@
     const was = S.fueling;
     S.fueling = false;
     if (!atPump || S.fuel >= 99.9) {
-      if (was) popup(`Tanque al ${Math.round(S.fuel)}%  (-$${money(S.fuelPaid)})`, '#9be37a');
+      if (was) { popup(`Tanque al ${Math.round(S.fuel)}%  (-$${money(S.fuelPaid)})`, '#9be37a'); learned('estacion'); }
       if (was || !atPump) S.fuelPaid = 0;
       return;
     }
@@ -1327,7 +1342,9 @@
       if (!W.event && S.elapsed > W.nextAt) {
         W.event = { type: pick(EVENTS), t: 0, dur: rand(40, 60) };
         const [a, b] = EVENT_TEXT[W.event.type];
-        toast(`${a}<br><small>${b}</small>`, '#cfe3ff');
+        // La primera vez, con el consejo; después, solo el aviso chico (el HUD dice LLUVIA / NIEBLA).
+        if (pista(W.event.type)) { toast(`${a}<br><small>${b}</small>`, '#cfe3ff'); learned(W.event.type); }
+        else popup(a, '#cfe3ff');
       }
       if (W.event) {
         W.event.t += dt;
@@ -1340,7 +1357,7 @@
         const fire = Ambiente.makeFire(rand(36, 60));
         fire.position.x = side * rand(110, 170);
         addWorld(fire, S.dist + rand(420, 560), { fire: true });
-        popup(`Incendio de campo a lo lejos, a la ${side > 0 ? 'derecha' : 'izquierda'}`, '#ffb347');
+        if (pista('fuego')) { popup(`Incendio de campo a lo lejos, a la ${side > 0 ? 'derecha' : 'izquierda'}`, '#ffb347'); learned('fuego'); }
       }
     }
     const want = (k) => (W.event && W.event.type === k && W.event.t < W.event.dur - 5 ? 1 : 0);
@@ -1527,29 +1544,34 @@
     // Estación de servicio: adelante (si falta gasoil), en el desvío y cargando.
     const st = STATIONS.find((c) => c - S.dist > -STATION.FULL && c - S.dist < 420);
     const inStation = st !== undefined && S.busX > 6.5;
+    // Pistas aprendidas: volver a tu mano después del aviso, pasar el fin de la Interbalnearia.
+    if (S.warnedWrongWay && !contramano()) learned('contramano');
+    if (PROFILE_CHANGES.length && S.dist > PROFILE_CHANGES[0].pos + 40) learned('merge');
     if (S.fuel <= 0 && mode === 'play') {
       msg = '¡SIN GASOIL!';
-    } else if (inStation && mode === 'play' && st - S.dist > -STATION.pumpHalf) {
+    } else if (inStation && mode === 'play' && S.noMoney && Math.abs(st - S.dist) < STATION.pumpHalf) {
+      msg = 'No te alcanza la plata para cargar';
+    } else if (inStation && mode === 'play' && st - S.dist > -STATION.pumpHalf && pista('estacion')) {
       const d = st - S.dist;
       if (S.fueling) msg = `Cargando gasoil… ${Math.floor(S.fuel)}%  ·  -$${money(S.fuelPaid)}`;
-      else if (S.noMoney) msg = 'No te alcanza la plata para cargar';
       else if (S.fuel >= 99.9) msg = 'Tanque lleno · seguí viaje ◀';
       else if (Math.abs(d) < STATION.pumpHalf) msg = S.speed > 1.5 ? '¡FRENÁ en las bombas!' : 'Cargando…';
-      else msg = `Bombas en ${realM(d)} m · frená en la zona amarilla`;
-    } else if (st !== undefined && !inStation && st - S.dist > 40 && st - S.dist < 330 && S.fuel < 85 && mode === 'play' && !headOn) {
+      else msg = `Bombas en ${realM(d)} m · frená donde brilla el piso`;
+    } else if (st !== undefined && !inStation && st - S.dist > 40 && st - S.dist < 330 && S.fuel < 85 && mode === 'play' && !headOn && pista('estacion')) {
       const m = realM(st - S.dist);
       msg = `Estación de servicio a ${m >= 1000 ? kmText(m / 1000) + ' km' : m + ' m'} · ▶ desvío a la derecha`;
     } else if (headOn && mode === 'play') {
       msg = '¡VIENE UNO DE FRENTE!  Volvé a tu carril ▶';
-    } else if (contramano() && !twoWay() && mode === 'play') {
+    } else if (contramano() && !twoWay() && mode === 'play' && pista('contramano')) {
+      S.warnedWrongWay = true;
       msg = '¡VAS DE CONTRAMANO!  Volvé a tu mano ▶';
-    } else if (light && light.light !== 'green' && mode === 'play') {
+    } else if (light && light.light !== 'green' && mode === 'play' && pista('semaforo')) {
       const d = light.pos - 6 - S.dist - bus.userData.len / 2;
       msg = light.light === 'yellow' ? '¡Amarillo! Frená antes de la línea'
         : S.speed < 1 ? 'Semáforo en rojo · esperá el verde' : `¡SEMÁFORO EN ROJO!  Frená (${Math.max(0, Math.round(d))} m)`;
-    } else if (merge && S.busX < 0.6 && mode === 'play') {
+    } else if (merge && S.busX < 0.6 && mode === 'play' && pista('merge')) {
       msg = 'Termina la Interbalnearia: pasá al carril derecho ▶';
-    } else if (peajeFirst && mode === 'play') {
+    } else if (peajeFirst && mode === 'play' && pista('peaje')) {
       const d = peaje.pos - S.dist;
       const max = ROUTE3D_COMMON.peajeMaxKmh;
       const islands = peaje.obj ? peaje.obj.userData.islands : [];
@@ -1558,13 +1580,13 @@
         else if (d < M_PER_KM * 1.5 && S.speed * KMH > max) msg = `¡FRENÁ!  Peaje a ${max} km/h`;
         else msg = `Peaje ${peaje.name} en ${realM(d)} m · máx. ${max} km/h`;
       }
-    } else if (next && mode === 'play') {
+    } else if (next && mode === 'play' && pista('parada')) {
       const d = next.pos - S.dist;
       if (d < M_PER_KM * 4) {   // aviso con tiempo: frenar un ómnibus lleva ~40 m
         const inZone = next.zone && Math.abs(next.zone.position.z) < 14;
         if (inZone && Math.abs(S.busX - LANE_X[RIGHT]) >= 0.5) msg = '¡CARRIL DERECHO! ▶';
-        else if (inZone && S.speed > STOP_SPEED) msg = '¡FRENÁ!  (20 km/h o menos)';
-        else msg = `${next.name} en ${realM(d)} m · pasaje $${money(next.fare)}`;
+        else if (inZone && S.speed > STOP_SPEED) msg = '¡FRENÁ donde brilla el piso!  (20 km/h o menos)';
+        else msg = `${next.name} en ${realM(d)} m · frená en la luz, carril derecho`;
       }
     }
     if (hudCache.banner !== msg) {
@@ -1572,6 +1594,20 @@
       $('banner').textContent = msg;
       $('banner').classList.toggle('hidden', !msg);
     }
+  }
+
+  // ---------- Pistas para el jugador ----------
+  // Los carteles que explican qué hacer (parada, estación, peaje, semáforo, contramano...) salen solo
+  // hasta que el jugador lo hizo una vez en esa PC/celular. Los avisos de peligro (viene uno de frente,
+  // sin gasoil) salen siempre. ?pistas en la dirección las vuelve a mostrar.
+  const HINTS_KEY = 'cot-ruta-3d-pistas';
+  let hints = {};
+  try { hints = /[?&]pistas\b/.test(location.search) ? {} : JSON.parse(localStorage.getItem(HINTS_KEY) || '{}') || {}; } catch (e) { hints = {}; }
+  const pista = (key) => !hints[key];
+  function learned(key) {
+    if (hints[key]) return;
+    hints[key] = 1;
+    try { localStorage.setItem(HINTS_KEY, JSON.stringify(hints)); } catch (e) { /* no se recuerda */ }
   }
 
   function popup(text, color) {

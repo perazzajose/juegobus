@@ -267,5 +267,98 @@ const Ambiente = (() => {
     return lines;
   }
 
-  return { MOON_DIR, GLOW, POOL_MAT, LAMP_MAT, nightSky, headlightPool, carLights, makeFire, makeRain, additive };
+  // ---------- Zona de parada / bombas: luz que sale del piso (como en los juegos de los 2000) ----------
+  // Un rectángulo de luz suave en el asfalto y "paredes" de luz bajas que se desvanecen hacia arriba,
+  // con franjas que suben despacio. Todo aditivo y tenue: se ve sin tapar la ruta. Vértices cada 2 m a
+  // lo largo para que se curve con la ruta (bend3d.js). Un material por color, animado en updateZones().
+  const zoneMats = {};
+  function zoneMaterials(color) {
+    if (zoneMats[color]) return zoneMats[color];
+    // Piso: rectángulo con bordes suaves.
+    const floor = new THREE.CanvasTexture(canvas(64, 128, (g, w, h) => {
+      const img = g.createImageData(w, h);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const dx = Math.min(x, w - 1 - x) / (w * 0.5), dy = Math.min(y, h - 1 - y) / (h * 0.5);
+        const edge = Math.min(1, dx / 0.35) * Math.min(1, dy / 0.18);       // 0 en el borde, 1 adentro
+        const rim = Math.exp(-Math.pow((Math.min(dx * 2.2, dy * 5.5) - 0.12) / 0.1, 2)); // borde más brillante
+        const v = Math.round(255 * Math.min(1, edge * 0.35 + rim * 0.55));
+        const i = (y * w + x) * 4;
+        img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+        img.data[i + 3] = 255;
+      }
+      g.putImageData(img, 0, 0);
+    }));
+    // Paredes: fuertes abajo, nada arriba, con franjas horizontales que se repiten (suben con offset).
+    const wall = new THREE.CanvasTexture(canvas(8, 128, (g, w, h) => {
+      for (let y = 0; y < h; y++) {
+        const k = y / h;                                   // 0 arriba, 1 abajo (en el canvas)
+        const band = 0.55 + 0.45 * Math.pow(Math.sin(k * Math.PI * 4) * 0.5 + 0.5, 3);
+        const v = Math.round(255 * band);
+        g.fillStyle = `rgb(${v},${v},${v})`;
+        g.fillRect(0, y, w, 1);
+      }
+    }));
+    wall.wrapT = THREE.RepeatWrapping;
+    const fade = new THREE.CanvasTexture(canvas(8, 64, (g, w, h) => {
+      const gr = g.createLinearGradient(0, 0, 0, h);
+      gr.addColorStop(0, '#000');
+      gr.addColorStop(0.6, '#555');
+      gr.addColorStop(1, '#fff');
+      g.fillStyle = gr;
+      g.fillRect(0, 0, w, h);
+    }));
+    const opts = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide };
+    const m = {
+      floor: new THREE.MeshBasicMaterial({ ...opts, map: floor, color, opacity: 0.55 }),
+      wall: new THREE.MeshBasicMaterial({ ...opts, map: wall, alphaMap: fade, color, opacity: 0.35 })
+    };
+    // Con blending aditivo three.js usa la transparencia (SrcAlpha), así que alphaMap desvanece las paredes.
+    zoneMats[color] = m;
+    return m;
+  }
+
+  function zoneGlow(color, w = 3.4, len = 16, h = 2.6) {
+    const m = zoneMaterials(color);
+    const g = new THREE.Group();
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.6, len + 1, 1, Math.ceil(len / 2)).rotateX(-Math.PI / 2), m.floor);
+    floor.position.y = 0.04;
+    floor.renderOrder = 2;
+    g.add(floor);
+    // Cuatro paredes de luz (las largas con cortes cada 2 m).
+    const pos = [], uv = [], idx = [];
+    const wallQuad = (x0, z0, x1, z1) => {
+      const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 2));
+      const b = pos.length / 3;
+      for (let i = 0; i <= n; i++) {
+        const t = i / n, x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
+        pos.push(x, 0, z, x, h, z);
+        uv.push(t, 0, t, 1);
+        if (i) { const a = b + (i - 1) * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+      }
+    };
+    const hw = w / 2, hl = len / 2;
+    wallQuad(-hw, -hl, -hw, hl); wallQuad(hw, -hl, hw, hl); wallQuad(-hw, -hl, hw, -hl); wallQuad(-hw, hl, hw, hl);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    const walls = new THREE.Mesh(geo, m.wall);
+    walls.renderOrder = 3;
+    g.add(walls);
+    g.traverse((o) => { o.frustumCulled = false; });
+    return g;
+  }
+
+  // Animación de todas las zonas: las franjas suben y la luz late suave.
+  function updateZones(t) {
+    for (const k in zoneMats) {
+      const m = zoneMats[k];
+      m.wall.map.offset.y = -t * 0.35;
+      const p = 0.5 + 0.5 * Math.sin(t * 3);
+      m.wall.opacity = 0.42 + 0.16 * p;
+      m.floor.opacity = 0.5 + 0.15 * p;
+    }
+  }
+
+  return { MOON_DIR, GLOW, POOL_MAT, LAMP_MAT, nightSky, headlightPool, carLights, makeFire, makeRain, additive, zoneGlow, updateZones };
 })();

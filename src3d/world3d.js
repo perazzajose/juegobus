@@ -849,10 +849,8 @@ const World3D = (() => {
     curb.position.set(6.55, 0.06, 0);
     g.add(curb);
     // Zona de carga pintada junto a las bombas.
-    const zone = new THREE.Mesh(new THREE.PlaneGeometry(3.4, pumpHalf * 2, 1, 4), pumpZoneMat);
-    zone.rotation.x = -Math.PI / 2;
-    zone.position.set(laneX, 0.035, 0);
-    zone.renderOrder = 2;
+    const zone = Ambiente.zoneGlow(ZONE_PUMP, 3.4, pumpHalf * 2, 2.2);
+    zone.position.set(laneX, 0, 0);
     g.add(zone);
     // Isla de las bombas (a la derecha del ómnibus) y dos surtidores.
     g.add(boxMesh(std(0xcfcac0, 0.9), 1.2, 0.25, pumpHalf * 2 - 2, pumpX, 0.125, 0));
@@ -999,39 +997,13 @@ const World3D = (() => {
   }
 
   // ---------- Paradas ----------
-  const zoneTex = (label) => canvasTex(128, 512, (c, W, H) => {
-    c.fillStyle = 'rgba(242,183,5,0.28)';
-    c.fillRect(0, 0, W, H);
-    c.save();
-    c.beginPath(); c.rect(6, 6, W - 12, H - 12); c.clip();
-    c.strokeStyle = 'rgba(242,183,5,0.55)';
-    c.lineWidth = 10;
-    for (let k = -H; k < W + H; k += 34) { c.beginPath(); c.moveTo(k, 0); c.lineTo(k + H, H); c.stroke(); }
-    c.restore();
-    c.strokeStyle = '#f2b705';
-    c.lineWidth = 8;
-    c.strokeRect(4, 4, W - 8, H - 8);
-    c.save();
-    c.translate(W / 2, H / 2);
-    c.fillStyle = 'rgba(0,0,0,0.6)';
-    c.fillRect(-56, -26, 112, 52);
-    c.fillStyle = '#f2b705';
-    c.font = 'bold 28px Arial';
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText(label, 0, 2);
-    c.restore();
-  });
-  const stopZoneMat = new THREE.MeshStandardMaterial({ map: zoneTex('PARADA'), transparent: true, depthWrite: false, roughness: 0.8 });
-  const pumpZoneMat = new THREE.MeshStandardMaterial({ map: zoneTex('GASOIL'), transparent: true, depthWrite: false, roughness: 0.8 });
 
+  // Zona de la parada: luz suave que sale del piso (ambiente3d.js), en el carril derecho.
+  const ZONE_STOP = 0x5fd8ff, ZONE_PUMP = 0x5cff9d;   // celeste y verde: no se confunden con los faros
   function makeStopZone() {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 16, 1, 4), stopZoneMat);
-    m.rotation.x = -Math.PI / 2;
-    m.position.set(LANE_X[LANE_X.length - 1], 0.02, 0);
-    m.renderOrder = 2;
-    m.receiveShadow = true;
-    return m;
+    const g = Ambiente.zoneGlow(ZONE_STOP, 3.4, 16, 3.2);
+    g.position.set(LANE_X[LANE_X.length - 1], 0, 0);
+    return g;
   }
 
   function makeShelter(name) {

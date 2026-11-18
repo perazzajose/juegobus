@@ -123,7 +123,8 @@ La elección se puede cambiar en el título con el botón **CONTROLES**. En el c
 
 ## Reglas y puntaje
 
-- **Paradas:** en el carril derecho, frená a 20 km/h o menos sobre la zona amarilla. Cada pasajero da 100 puntos. Si se te pasa una parada, perdés 10 % de confort.
+- **Paradas:** en el carril derecho, frená a 20 km/h o menos donde sale la luz celeste del piso. Cada pasajero da 100 puntos. Si frenás un poco pasado (hasta unos 40 m), suben igual pero caminan hasta el ómnibus y se pierde algo de confort (de 2 a 8 %). Más lejos, se te pasó la parada: −10 % de confort.
+- **Carteles de ayuda:** las indicaciones (parada, estación, peaje, semáforo, contramano) salen solo hasta que el jugador lo hizo una vez en esa PC o celular. Los avisos de peligro salen siempre. Para volver a verlas: `index.html?pistas`.
 - **Choques:** cada choque resta 30 % de confort y cuesta plata de arreglo (auto $ 2.500, camión $ 4.000, moto $ 1.500, isleta del peaje $ 3.000; si no alcanza, se lleva lo que haya). Si el confort llega a 0, el viaje termina.
 - **Mate:** recupera 15 % de confort. **Encomienda:** da 50 puntos y $ 220.
 - **Plata:** cada pasajero paga la tarifa oficial de COT desde su parada hasta Chuy (de $ 1.005 en Atlántida a $ 110 en La Coronilla; se ve en el aviso de la parada). Salís con $ 1.500 y el tanque al 70 %.
