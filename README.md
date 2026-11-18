@@ -134,7 +134,7 @@ La elección se puede cambiar en el título con el botón **CONTROLES**. En el c
 
 El ranking (nombre + empresa + puntos) se guarda en una base de datos de Supabase y se ve igual en todas las PCs y celulares. Si no hay internet, el juego sigue con el ranking de esa PC y manda los viajes pendientes la próxima vez que haya conexión.
 
-**Configurarlo (una sola vez):**
+**Ya está configurado:** proyecto `juegobus` de Supabase (São Paulo), tabla `ranking`, datos en `src/rankingConfig.js`. Si algún día hay que armarlo de nuevo:
 
 1. En [supabase.com](https://supabase.com) crear un proyecto gratis.
 2. En **SQL Editor**, pegar todo `supabase/ranking.sql` y tocar **Run**. Crea la tabla `ranking` con permisos para leer y agregar viajes, pero no para borrar ni cambiar.

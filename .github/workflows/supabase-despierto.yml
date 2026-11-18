@@ -34,7 +34,7 @@ jobs:
           for i in 1 2 3; do
             CODE=$(curl -s -o respuesta.json -w '%{http_code}' \
               "$URL/rest/v1/ranking?select=id,puntos&order=puntos.desc&limit=5" \
-              -H "apikey: $KEY" -H "Authorization: Bearer $KEY")
+              -H "apikey: $KEY")
             echo "Intento $i: HTTP $CODE"
             if [ "$CODE" = "200" ]; then cat respuesta.json; echo; exit 0; fi
             sleep 20

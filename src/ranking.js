@@ -61,7 +61,13 @@ const RankingOnline = {
     return fetch(this.cfg.url.replace(/\/$/, '') + '/rest/v1/' + path, {
       ...opts,
       signal: ctl ? ctl.signal : undefined,
-      headers: { apikey: this.cfg.key, Authorization: 'Bearer ' + this.cfg.key, 'Content-Type': 'application/json', ...(opts.headers || {}) }
+      // Las claves nuevas (sb_publishable_...) van solo en "apikey": en Authorization Supabase las
+      // rechaza (espera un JWT). Las viejas "anon" (JWT, eyJ...) van en los dos.
+      headers: {
+        apikey: this.cfg.key, 'Content-Type': 'application/json',
+        ...(/^eyJ/.test(this.cfg.key) ? { Authorization: 'Bearer ' + this.cfg.key } : {}),
+        ...(opts.headers || {})
+      }
     }).then((r) => {
       clearTimeout(timer);
       if (!r.ok) throw new Error('HTTP ' + r.status);
