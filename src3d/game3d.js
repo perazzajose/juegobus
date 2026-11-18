@@ -1672,7 +1672,7 @@
     // Un solo viaje: tocarlo sale directo (modo kiosco: un solo toque).
     const b = document.createElement('button');
     b.className = 'tramo on';
-    b.innerHTML = '<b>Línea 152I · viaje completo</b><span>Tres Cruces → Chuy · Interbalnearia y Ruta 9</span>';
+    b.innerHTML = '<b>Viaje completo</b><span>Tres Cruces → Chuy · Interbalnearia y Ruta 9</span>';
     b.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       if (mode === 'title') startGame();
