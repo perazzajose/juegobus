@@ -227,7 +227,7 @@
     return {
       attract, dist: 0, speed: attract ? 22 : 0, elapsed: 0, score: 0, passengers: 0, boxes: 0, crashes: 0,
       latV: 0, roll: 0, pitch: 0, camX: LANE_X[RIGHT] * 0.75, prevSpeed: attract ? 22 : 0,
-      money: START_MONEY, repairs: 0, fuel: START_FUEL, fuelPaid: 0, fueling: false, noMoney: 0, fuelWarn: 0,
+      money: START_MONEY, repairs: 0, earnPax: 0, earnBox: 0, fuelTotal: 0, fuel: START_FUEL, fuelPaid: 0, fueling: false, noMoney: 0, fuelWarn: 0,
       weather: { rain: 0, fog: 0, event: null, nextAt: attract ? 1e9 : rand(45, 70), fireAt: rand(1200, 2000), flash: 0 },
       confort: 100, invuln: 0, stunned: 0, lane: RIGHT, targetX: LANE_X[RIGHT], busX: LANE_X[RIGHT], shake: 0,
       cars: [], pickups: [],
@@ -566,7 +566,7 @@
 
   // Arma el viaje: paisaje, cerros, curvas y ranking (uno solo, del viaje completo).
   function setupRoute() {
-    Ranking.KEY = 'cot-ruta-3d-ranking-completo';
+    Ranking.KEY = 'cot-ruta-3d-ranking-plata';
     buildDecos();
     buildBackdrops();
     buildProfile();
@@ -1182,7 +1182,7 @@
         } else if (m.stopped > RED_STOPPED) {
           S.score += 40;
           Sfx.pickup();
-          popup('Esperaste el verde  +40', '#9be37a');
+          popup('Esperaste el verde', '#9be37a');
         }
       }
     }
@@ -1201,7 +1201,7 @@
         // Ruta 9: pasar a uno lento sin chocarlo suma puntos.
         if (twoWay() && !u.oncoming && !u.hit && !u.fromSide) {
           S.score += 20;
-          popup('Sobrepaso +20', '#9be37a');
+          popup('Sobrepaso', '#9be37a');
         }
       }
       if (u.passed || u.hit || S.invuln > 0) continue;
@@ -1243,6 +1243,7 @@
         S.boxes++;
         S.score += 50;
         S.money += ENCOMIENDA;
+        S.earnBox += ENCOMIENDA;
         popup(`Encomienda +$${ENCOMIENDA}`, '#ffd36b');
       }
     }
@@ -1301,7 +1302,7 @@
         } else if (!m.hit) {
           S.score += 50;
           Sfx.pickup();
-          popup(`Peaje ${m.name} bien pasado  +50`, '#9be37a');
+          popup(`Peaje ${m.name} bien pasado`, '#9be37a');
         }
       }
       if (dz > reach + 5) m.done = true;
@@ -1314,6 +1315,7 @@
     S.passengers += s.waiting;
     S.score += s.waiting * 100;
     S.money += s.waiting * s.fare;
+    S.earnPax += s.waiting * s.fare;
     Sfx.board();
     s.people.forEach((p, i) => {
       const i0 = world.indexOf(p);
@@ -1352,6 +1354,7 @@
     S.fuel += add;
     S.money = Math.max(0, S.money - add * FUEL_PRICE);
     S.fuelPaid += add * FUEL_PRICE;
+    S.fuelTotal += add * FUEL_PRICE;
     S.fuelWarn = S.fuel < 10 ? 2 : S.fuel < 20 ? 1 : 0;
     S.fueling = true;
   }
@@ -1594,7 +1597,7 @@
     setText('hTime', `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`);
     setText('hSpeed', `${Math.round(S.speed * KMH)} km/h`);
     setText('hPax', `PASAJ. ${S.passengers}`);
-    setText('hScore', `${S.score} pts`);
+    setText('hScore', '');                // el ranking es por plata y tiempo (ya están en el HUD)
     setText('hMoney', `$ ${money(S.money)}`);
     const W = S.weather;
     setText('hWeather', W.fog > 0.3 ? 'NIEBLA' : W.rain > 0.3 ? 'LLUVIA' : '');
@@ -1736,7 +1739,7 @@
   function rankTable(el, highlight, max) {
     const online = RankingOnline.cache && RankingOnline.cache.length ? RankingOnline.cache : null;
     const list = online
-      ? online.slice(0, max).map((r) => ({ id: r.id, name: r.nombre, company: r.empresa, score: r.puntos }))
+      ? online.slice(0, max).map((r) => ({ id: r.id, name: r.nombre, company: r.empresa, money: r.plata, time: Number(r.segundos) }))
       : Ranking.load().slice(0, max);
     el.innerHTML = '';
     if (!list.length) return;
@@ -1751,9 +1754,13 @@
       c1.textContent = `${i + 1}. ${r.name} `;
       const co = COMPANIES.find((c) => c.id === r.company);
       if (co) { const sp = document.createElement('span'); sp.className = 'co'; sp.textContent = co.name; c1.appendChild(sp); }
-      tr.insertCell().textContent = r.score;
+      tr.insertCell().textContent = `$ ${money(r.money)}`;
+      const t = tr.insertCell();
+      t.className = 'time';
+      t.textContent = clock(r.time);
     });
   }
+  const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
   function goTitle() {
     mode = 'title';
@@ -1774,7 +1781,8 @@
     'Ruta 9 tiene un carril por mano: para pasar a un camión salí al carril de enfrente cuando no venga nadie.',
     'Los pasajes y las encomiendas dan plata. Con esa plata cargás gasoil: si te quedás sin, se termina el viaje.',
     'Para cargar gasoil, entrá al desvío de la estación de servicio (a la derecha) y frená en las bombas.',
-    'Con lluvia el ómnibus frena peor, y con niebla se ve poco: andá más despacio.'
+    'Con lluvia el ómnibus frena peor, y con niebla se ve poco: andá más despacio.',
+    'El ranking es por la plata con la que llegás a Chuy. Si empatan, gana el que tardó menos.'
   ];
   let tipIdx = Math.floor(Math.random() * TIPS.length);
   function renderTitle() {
@@ -1857,31 +1865,28 @@
     const mins = Math.floor(S.elapsed / 60);
     const secs = String(Math.floor(S.elapsed % 60)).padStart(2, '0');
     const stopsDone = S.stops.filter((s) => s.done).length;
-    const confort = Math.round(S.confort);
     $('rTitle').textContent = arrived ? '¡LLEGASTE!' : S.endReason === 'fuel' ? 'SIN GASOIL' : 'VIAJE TERMINADO';
     $('rTitle').style.color = arrived ? '#f2b705' : '#ff6b5e';
     // Km recorridos: suma de lo hecho en cada segmento (sin el salto de km de Pan de Azúcar).
     const kmDone = SEGS.reduce((a, g) => a + Math.max(0, Math.min(g.to, kmAt(Math.min(S.dist, g.p1 - 0.01))) - g.from) * (S.dist > g.p0 ? 1 : 0), 0);
     $('rStats').textContent = `${R.origin} → ${R.dest} · ${kmDone.toFixed(1)} km en ${mins}:${secs} · Paradas ${stopsDone}/${S.stops.length} · Choques ${S.crashes}${S.repairs ? ` (arreglos $ ${money(S.repairs)})` : ''}`;
+    // Resultado en plata: el ranking es por la plata con la que se llega a Chuy (empate: menos tiempo).
     const rows = [
-      [`Pasajeros (${S.passengers} × 100)`, S.passengers * 100],
-      [`Encomiendas (${S.boxes} × 50)`, S.boxes * 50]
+      ['Caja al salir de Tres Cruces', START_MONEY],
+      [`Pasajes (${S.passengers} pasajeros)`, S.earnPax],
+      [`Encomiendas (${S.boxes})`, S.earnBox],
+      ['Gasoil', -S.fuelTotal],
+      [`Arreglos (${S.crashes} choque${S.crashes === 1 ? '' : 's'})`, -S.repairs]
     ];
-    if (arrived) {
-      rows.push(['Llegada a destino', 500]);
-      rows.push(['Puntualidad', Math.max(0, Math.round((TARGET_TIME - S.elapsed) * 20))]);
-      rows.push([`Confort (${confort}% × 5)`, confort * 5]);
-      rows.push([`Plata en caja ($ ${money(S.money)} ÷ 10)`, Math.round(S.money / 10)]);
-    }
-    const total = rows.reduce((a, r) => a + r[1], 0);
     const table = $('rRows');
     table.innerHTML = '';
-    rows.forEach(([label, pts]) => {
+    rows.forEach(([label, v]) => {
       const tr = table.insertRow();
       tr.insertCell().textContent = label;
-      tr.insertCell().textContent = pts;
+      tr.insertCell().textContent = `${v < 0 ? '−' : v > 0 && label !== rows[0][0] ? '+' : ''}$ ${money(Math.abs(v))}`;
     });
-    $('rTotal').textContent = `${total} PUNTOS`;
+    // Lo que cuenta para el ranking (el título ya dice si llegaste).
+    $('rTotal').textContent = arrived ? `$\u00a0${money(S.money)}` : 'NO ENTRA AL RANKING';
     $('rRank').innerHTML = '';
     show('rPrompt', false);
     show('resultScreen', true);
@@ -1894,10 +1899,11 @@
       clearTimeout(showResult.timer);
       showResult.timer = setTimeout(() => { if (mode === 'result') leaveResult(); }, 25000);
     };
-    if (Ranking.qualifies(total)) done(Ranking.add(player.name || 'JUGADOR', total, player.company));
-    else done(-1);
+    // Solo entran al ranking los que llegaron a Chuy.
+    if (!arrived) { done(-1); return; }
+    done(Ranking.add(player.name || 'JUGADOR', player.company, S.money, S.elapsed));
     // Ranking online: se manda el viaje y, cuando vuelve, se muestra el top con este viaje resaltado.
-    RankingOnline.add(player.name || 'JUGADOR', player.company, total, kmDone, arrived)
+    RankingOnline.add(player.name || 'JUGADOR', player.company, S.money, S.elapsed, kmDone)
       .then((id) => RankingOnline.top(10).then((list) => {
         if (list && mode === 'result') rankTable($('rRank'), { id }, 10);
       }));

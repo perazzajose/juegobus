@@ -1,12 +1,16 @@
-// Ranking local (top 10) guardado en el navegador de la máquina del evento.
+// Ranking: gana el que llega a Chuy con más plata; si empatan, el que tardó menos.
+// Solo entran los viajes que llegaron. Cada entrada: { name, company, money, time (s), date }.
+const byMoney = (a, b) => (b.money - a.money) || (a.time - b.time) || (a.date - b.date);
+
+// Ranking local (top 10) guardado en el navegador de esta PC o celular.
 const Ranking = {
-  KEY: 'cot-ruta-a-la-costa-ranking',
+  KEY: 'cot-ruta-3d-ranking-plata',
   SIZE: 10,
 
   load() {
     try {
       const list = JSON.parse(localStorage.getItem(this.KEY) || '[]');
-      return Array.isArray(list) ? list : [];
+      return Array.isArray(list) ? list.filter((e) => typeof e.money === 'number') : [];
     } catch (e) {
       return [];
     }
@@ -20,19 +24,12 @@ const Ranking = {
     }
   },
 
-  qualifies(score) {
-    const list = this.load();
-    return score > 0 && (list.length < this.SIZE || score > list[list.length - 1].score);
-  },
-
-  // Devuelve la posición (0 = primero) en la que quedó la entrada.
-  // company es opcional (el 3D guarda la empresa del jugador).
-  add(name, score, company) {
-    const entry = { name, score, date: Date.now() };
-    if (company) entry.company = company;
+  // Devuelve la posición (0 = primero) en la que quedó la entrada, o -1 si no entró al top.
+  add(name, company, money, time) {
+    const entry = { name, company, money: Math.round(money), time: Math.round(time * 10) / 10, date: Date.now() };
     const list = this.load();
     list.push(entry);
-    list.sort((a, b) => b.score - a.score);
+    list.sort(byMoney);
     const top = list.slice(0, this.SIZE);
     this.save(top);
     return top.indexOf(entry);
@@ -49,7 +46,7 @@ const Ranking = {
 const RankingOnline = {
   PENDING_KEY: 'cot-ruta-3d-ranking-pendientes',
   TIMEOUT: 6000,
-  cache: null,           // último top descargado: [{ id, nombre, empresa, puntos }]
+  cache: null,           // último top descargado: [{ id, nombre, empresa, plata, segundos }]
   lastId: null,          // id del último viaje mandado desde esta PC (para resaltarlo)
 
   get cfg() { return window.RANKING_ONLINE || {}; },
@@ -75,10 +72,11 @@ const RankingOnline = {
     }, (e) => { clearTimeout(timer); throw e; });
   },
 
-  // Top n (por puntos; en empate, el más viejo primero). Guarda el resultado en cache.
+  // Top n: más plata al llegar a Chuy; si empatan, menos tiempo. Guarda el resultado en cache.
   top(n = 10) {
     if (!this.enabled()) return Promise.resolve(null);
-    return this.request(`ranking?select=id,nombre,empresa,puntos&order=puntos.desc,creado.asc&limit=${n}`)
+    return this.request(`ranking?select=id,nombre,empresa,plata,segundos&llego=is.true&plata=not.is.null` +
+      `&order=plata.desc,segundos.asc,creado.asc&limit=${n}`)
       .then((list) => { this.cache = list; return list; })
       .catch(() => null);
   },
@@ -97,12 +95,14 @@ const RankingOnline = {
     }).then((rows) => (rows && rows[0] ? rows[0].id : null));
   },
 
-  // Manda un viaje. Devuelve una promesa con el id (o null si quedó pendiente / no hay online).
-  add(nombre, empresa, puntos, km, llego) {
-    if (!this.enabled() || !(puntos > 0)) return Promise.resolve(null);
+  // Manda un viaje que llegó a Chuy. Devuelve una promesa con el id (o null si quedó pendiente / no hay online).
+  // puntos queda por compatibilidad con la tabla (columna obligatoria); el orden es por plata y segundos.
+  add(nombre, empresa, plata, segundos, km) {
+    if (!this.enabled()) return Promise.resolve(null);
     const entry = {
       nombre: String(nombre || 'JUGADOR').trim().slice(0, 12) || 'JUGADOR',
-      empresa, puntos: Math.round(puntos), km: Math.round(km * 10) / 10, llego: !!llego
+      empresa, plata: Math.max(0, Math.round(plata)), segundos: Math.round(segundos * 10) / 10,
+      puntos: Math.max(1, Math.min(50000, Math.round(plata / 10))), km: Math.round(km * 10) / 10, llego: true
     };
     return this.flush().then(() => this.send(entry)).then((id) => { this.lastId = id; return id; }, () => {
       this.savePending(this.pending().concat(entry));

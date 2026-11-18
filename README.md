@@ -135,7 +135,7 @@ La elección se puede cambiar en el título con el botón **CONTROLES**. En el c
 - **Mate:** recupera 15 % de confort. **Encomienda:** da 50 puntos y $ 220.
 - **Plata:** cada pasajero paga la tarifa oficial de COT desde su parada hasta Chuy (de $ 1.005 en Atlántida a $ 110 en La Coronilla; se ve en el aviso de la parada). Salís con $ 1.500 y el tanque al 70 %.
 - **Gasoil:** un tanque lleno alcanza para un tercio del viaje (hay 8 estaciones). Cargar cuesta $ 60 cada 1 % del tanque; carga mientras alcance la plata. Sin gasoil, el ómnibus se apaga y el viaje termina.
-- **Al llegar:** sumás 500 puntos, más un bono de puntualidad, un bono de confort y la plata que te quedó dividida 10.
+- **Ranking:** gana el que llega a Chuy con más plata; si empatan, el que tardó menos. Los viajes que no llegan (sin gasoil o con el confort en 0) no entran. Al final se ve la cuenta: caja inicial, pasajes, encomiendas, gasoil y arreglos.
 
 ## Ranking online (Supabase)
 

@@ -17,6 +17,12 @@ create table if not exists public.ranking (
 
 create index if not exists ranking_puntos_idx on public.ranking (puntos desc, creado asc);
 
+-- Desde el 18/11/2026 el ranking es por la plata con la que se llega a Chuy (y, si empatan, el que
+-- tardó menos). Solo cuentan los viajes que llegaron (llego = true).
+alter table public.ranking add column if not exists plata integer check (plata between 0 and 500000);
+alter table public.ranking add column if not exists segundos numeric(6,1) check (segundos between 30 and 7200);
+create index if not exists ranking_plata_idx on public.ranking (plata desc, segundos asc) where llego and plata is not null;
+
 alter table public.ranking enable row level security;
 
 drop policy if exists "ranking: leer" on public.ranking;
