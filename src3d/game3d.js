@@ -1034,18 +1034,14 @@
     else Bend.at(-18, S.camX + rand(-sh, sh), 8.6 + rand(-sh, sh), camera.position);
     camera.lookAt(Bend.at(portrait ? 18 : 24, S.camX * 1.1, portrait ? -2 : 1, _look));
     if (mode === 'intro') {
-      // De adelante a la derecha (vista de tres cuartos, lejos) hasta la cámara de siempre.
-      // Gira alrededor del ómnibus a distancia (no pasa cerca) y al final se funde con la cámara normal.
+      // Toma de dron: arranca alta y bien atrás (el ómnibus se ve chico, de arriba: de cerca se notan
+      // los defectos del modelo) mirando la ruta por delante, y baja hasta la cámara de siempre.
       const t = Math.min(1, S.introT / INTRO_T);
       const k = t * t * (3 - 2 * t);
-      const a = (55 + 125 * k) * Math.PI / 180;               // 55° (adelante a la derecha) → 180° (atrás)
-      const r = (portrait ? 20 : 18) + 2 * Math.sin(k * Math.PI);
-      const y = 4 + ((portrait ? 10.5 : 8.6) - 4) * k;
-      Bend.at(r * Math.cos(a), S.busX + r * Math.sin(a), y, _introPos);
-      Bend.at(-1, S.busX, 1.8, _introLook);
-      const f = Math.max(0, (t - 0.7) / 0.3);                  // último tramo: se pega a la cámara de siempre
-      _introPos.lerp(camera.position, f);
-      _introLook.lerp(_look, f * f);
+      Bend.at(-42, S.busX + 7, 19, _introPos);
+      Bend.at(22, S.busX, -2, _introLook);
+      _introPos.lerp(camera.position, k);
+      _introLook.lerp(_look, k);
       camera.position.copy(_introPos);
       camera.lookAt(_introLook);
     }
@@ -1834,8 +1830,8 @@
     }
     drawProgress();
     meter.frames = 0; meter.time = 0; meter.settle = 1.5;
-    // Mini cinemática: la cámara arranca adelante y al costado del ómnibus (lejos: de cerca se notan
-    // los defectos del modelo) y en INTRO_T segundos se acomoda detrás. Se salta tocando o con una tecla.
+    // Mini cinemática: toma de dron, alta y atrás, que baja hasta la cámara de siempre en INTRO_T
+    // segundos (el ómnibus nunca se ve de cerca). Se salta tocando o con una tecla.
     mode = 'intro';
     S.introT = 0;
     S.speed = 4;
