@@ -16,7 +16,7 @@ Cámara detrás del ómnibus, tránsito en contramano, curvas y lomas. Se puede 
 
 - Se puede ir **de contramano**: en la Interbalnearia, cruzando la doble amarilla hasta los dos carriles de enfrente, y en Ruta 9 por el carril izquierdo. Los autos que vienen de frente se chocan. Las encomiendas y los mates solo aparecen en tu mano.
 - Los botones tienen estilo 16 bits: esquinas rectas y sombra dura.
-- **El viaje es de noche:** cielo con estrellas y luna, faros del ómnibus sobre el asfalto, luces de los autos, faroles en las ciudades, ventanas encendidas y paradas iluminadas.
+- **Sale de tarde y llega de noche:** sale de Tres Cruces con el sol bajo atrás, atardece (cielo naranja) por la Costa de Oro y desde Ruta 9 es de noche cerrada, con estrellas y luna. Con el atardecer se prenden los faros del ómnibus y de los autos, los faroles y las ventanas. Mientras más avanza, más oscuro, se ve menos lejos y los eventos (lluvia, niebla) vienen más seguido: el viaje se pone más difícil.
 - **Plata y gasoil:** los pasajes y las encomiendas dan plata; el gasoil se gasta andando. Se carga en las **estaciones de servicio**: un desvío corto a la derecha de la ruta (cartel "ESTACIÓN SERVICIO" antes). Hay que entrar al desvío y frenar en la zona amarilla "GASOIL", junto a las bombas. Si el gasoil llega a 0, el viaje termina.
 - **Eventos del camino:** cada tanto empieza a llover (el ómnibus frena peor), cae una niebla cerrada (se ve poco) o hay un incendio de campo a lo lejos.
 

@@ -155,30 +155,37 @@
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   $('view').appendChild(renderer.domElement);
 
-  // El viaje es de noche: cielo con estrellas y luna (ambiente3d.js), que además se refleja en la
-  // pintura y los vidrios. La luz es la de la luna más un poco de luz de cielo; los faros, faroles y
-  // carteles iluminados son manchas de luz aditivas (sin luces reales, que pesan en el celular).
+  // El viaje sale de tarde y llega de noche (updateDayNight): el cielo es una esfera que mezcla la foto
+  // del cielo de día, teñida de atardecer, con el cielo de noche (ambiente3d.js). La luz direccional es
+  // el sol bajo (atrás: se viaja hacia el este) y después la luna. Los reflejos usan el cielo de día o el
+  // de noche. Faros, faroles y ventanas se prenden con el atardecer (manchas aditivas, sin luces reales).
   const scene = new THREE.Scene();
-  const FOG_NIGHT = new THREE.Color(0x0c1322);
-  scene.fog = new THREE.Fog(FOG_NIGHT.getHex(), 90, 330);
+  const FOG_DAY = new THREE.Color(0xc9d8e6), FOG_SUNSET = new THREE.Color(0xd9a27e), FOG_NIGHT = new THREE.Color(0x0c1322);
+  scene.fog = new THREE.Fog(FOG_DAY.getHex(), 90, 330);
   const fogBase = { near: 90, far: 330 };    // los pone applyGfx; la lluvia y la niebla los achican
-  let envTex = null;                        // reflejos del cielo (en "ultra baja" no se usan)
-  const skyTex = Ambiente.nightSky();
+  const envs = { day: null, night: null };   // reflejos del cielo (en "ultra baja" no se usan)
+  const nightTex = Ambiente.nightSky();
   {
     const pmrem = new THREE.PMREMGenerator(renderer);
-    envTex = pmrem.fromEquirectangular(skyTex).texture;
+    envs.night = pmrem.fromEquirectangular(nightTex).texture;
     pmrem.dispose();
   }
-  scene.background = skyTex;
-  scene.environment = envTex;
-  scene.backgroundIntensity = 1;
-  renderer.toneMappingExposure = 1.3;
-  const hemi = new THREE.HemisphereLight(0x5a6f9e, 0x1a2230, 0.6);
+  const dayTex = new THREE.TextureLoader().load(TEX3D.sky, (t) => {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    envs.day = pmrem.fromEquirectangular(t).texture;
+    pmrem.dispose();
+  });
+  dayTex.mapping = THREE.EquirectangularReflectionMapping;
+  dayTex.colorSpace = THREE.SRGBColorSpace;
+  const sky = Ambiente.makeSky(dayTex, nightTex);
+  scene.add(sky);
+  const hemi = new THREE.HemisphereLight(0xdfeeff, 0x5a7a3c, 0.6);
   scene.add(hemi);
-  // La "luz del sol" ahora es la luna: viene de adelante a la izquierda, azulada (MOON_DIR).
-  const SUN_DIR = Ambiente.MOON_DIR;
+  // Sol de la tarde: bajo y atrás del ómnibus (al oeste), un poco a la derecha. De noche, la luna (MOON_DIR).
+  const SUN_DIR = new THREE.Vector3();
+  const SUN_AZ = new THREE.Vector3(0.32, 0, 0.95).normalize();
   const _sunDir = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _look = new THREE.Vector3();
-  const sun = new THREE.DirectionalLight(0xa9bcff, 1.2);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 40, bottom: -40, near: 1, far: 180 });
   sun.shadow.bias = -0.0004;
@@ -237,7 +244,7 @@
   }
 
   const HEMI_NIGHT = 2.1;                  // de noche hace falta más luz de cielo para ver la ruta
-  let hemiBase = 0.6;
+  let hemiBase = 0.6, hemiLevel = 0.6, hemiNight = HEMI_NIGHT, noEnv = false;
   function applyGfx(level) {
     gfx.level = level;
     const L = GFX_LEVELS[level];
@@ -251,9 +258,9 @@
     const shadowsChanged = renderer.shadowMap.enabled !== shadows;
     renderer.shadowMap.enabled = shadows;
     sun.castShadow = shadows;
-    hemi.intensity = (L.noEnv ? 2.6 : L.lambert ? 1.8 : 0.6) * (L.lambert ? HEMI_NIGHT * 0.65 : HEMI_NIGHT);
-    hemiBase = hemi.intensity;
-    scene.environment = L.noEnv ? null : envTex;
+    hemiLevel = L.noEnv ? 2.6 : L.lambert ? 1.8 : 0.6;
+    hemiNight = L.lambert ? HEMI_NIGHT * 0.65 : HEMI_NIGHT;
+    noEnv = !!L.noEnv;
     road.setQuality(L.lambert ? 'low' : L.normals ? 'high' : 'medium');
     // Distancia de dibujo: más niebla, menos lejos y la mitad de los árboles.
     fogBase.near = scene.fog.near = L.tiny ? 35 : L.short ? 60 : 90;
@@ -981,12 +988,13 @@
     updateTraffic(dt);
     updateDecos(dt);
     updateAnims(dt);
+    updateDayNight();
     updateWeather(dt);
     Ambiente.updateZones(performance.now() / 1000);
     // Faros del ómnibus sobre el asfalto (siguen al ómnibus).
     headPool.position.x = S.busX;
     headPool.rotation.y = bus.rotation.y;
-    headPool.visible = bus.visible || S.invuln > 0;
+    headPool.visible = (bus.visible || S.invuln > 0) && dayNight.k > 0.02;
 
     if (playing) {
       checkCars();
@@ -1002,7 +1010,8 @@
     // La sombra del sol sigue al ómnibus (cubre solo la zona cercana para que sea nítida).
     // El cielo y el sol giran con el rumbo de la ruta: en una curva el sol cambia de lado de a poco.
     const heading = headingAt(S.dist);
-    scene.backgroundRotation.y = scene.environmentRotation.y = heading;
+    scene.environmentRotation.y = heading;
+    sky.rotation.y = heading;
     _sunDir.copy(SUN_DIR).applyAxisAngle(_up, heading);
     sun.target.position.set(S.busX, 0, -14);
     sun.position.copy(sun.target.position).addScaledVector(_sunDir, 90);
@@ -1015,6 +1024,7 @@
     if (portrait) Bend.at(-20, S.camX + rand(-sh, sh), 10.5 + rand(-sh, sh), camera.position);
     else Bend.at(-18, S.camX + rand(-sh, sh), 8.6 + rand(-sh, sh), camera.position);
     camera.lookAt(Bend.at(portrait ? 18 : 24, S.camX * 1.1, portrait ? -2 : 1, _look));
+    sky.position.copy(camera.position);
 
     if (mode === 'play' || mode === 'ending') updateHud();
   }
@@ -1339,7 +1349,7 @@
     const L = GFX_LEVELS[gfx.level];
     // Eventos: uno por vez, con 40-60 s de duración; entran y salen de a poco.
     if (mode === 'play') {
-      if (!W.event && S.elapsed > W.nextAt) {
+      if (!W.event && S.elapsed > W.nextAt && S.dist > TRIP_M * 0.12) {
         W.event = { type: pick(EVENTS), t: 0, dur: rand(40, 60) };
         const [a, b] = EVENT_TEXT[W.event.type];
         // La primera vez, con el consejo; después, solo el aviso chico (el HUD dice LLUVIA / NIEBLA).
@@ -1348,7 +1358,8 @@
       }
       if (W.event) {
         W.event.t += dt;
-        if (W.event.t > W.event.dur) { W.event = null; W.nextAt = S.elapsed + rand(50, 90); }
+        // Mientras más avanza el viaje, más seguido (cerca de Chuy, casi uno atrás del otro).
+        if (W.event.t > W.event.dur) { W.event = null; W.nextAt = S.elapsed + rand(50, 90) * (1 - 0.6 * S.dist / TRIP_M); }
       }
       // Incendios de campo a lo lejos, fuera de las ciudades (no con niebla: no se verían).
       if (S.dist > W.fireAt && !biomeAt(kmAt(S.dist + 400)).lights && !(W.event && W.event.type === 'fog')) {
@@ -1366,10 +1377,11 @@
     if (W.rain < 0.002) W.rain = 0;
     if (W.fog < 0.002) W.fog = 0;
     // Niebla: se ve mucho menos y el color se aclara (la niebla refleja las luces).
-    scene.fog.near = fogBase.near * (1 - 0.8 * W.fog) * (1 - 0.35 * W.rain);
-    scene.fog.far = fogBase.far * (1 - 0.72 * W.fog) * (1 - 0.3 * W.rain);
-    scene.fog.color.copy(FOG_NIGHT).lerp(FOG_FOGGY, W.fog);
-    scene.backgroundIntensity = 1 - 0.85 * Math.max(W.fog, W.rain * 0.7);
+    const dark = 1 - 0.25 * dayNight.n;                                  // de noche se ve menos lejos
+    scene.fog.near = fogBase.near * dark * (1 - 0.8 * W.fog) * (1 - 0.35 * W.rain);
+    scene.fog.far = fogBase.far * dark * (1 - 0.72 * W.fog) * (1 - 0.3 * W.rain);
+    scene.fog.color.copy(fogCol).lerp(FOG_FOGGY, W.fog * (0.4 + 0.6 * dayNight.n));
+    sky.material.uniforms.uDim.value *= 1 - 0.85 * Math.max(W.fog, W.rain * 0.7);
     // Lluvia: rayitas frente a la cámara (menos gotas en las calidades bajas) y algún relámpago.
     if (W.rain > 0) {
       if (!rain) {
@@ -1386,6 +1398,59 @@
     for (const o of world) if (o.userData.fire) o.userData.update(S.elapsed);
   }
   const FOG_FOGGY = new THREE.Color(0x3a4352);
+
+  // ---------- De la tarde a la noche ----------
+  // Según cuánto del viaje se hizo (p): sale de tarde con el sol bajo, atardece (cielo naranja) hacia
+  // la Costa de Oro y es de noche cerrada desde Ruta 9. Mientras más oscuro, más difícil.
+  //   n = cuánto es de noche (0-1), ss = cuánto atardecer, k = luces prendidas.
+  const smooth01 = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const dayNight = { n: -1, ss: 0, k: 0 };
+  const fogCol = new THREE.Color();
+  const C_SUN = new THREE.Color(0xfff1dc), C_SUNSET = new THREE.Color(0xff8a4a), C_MOON = new THREE.Color(0xa9bcff);
+  const H_DAY = [new THREE.Color(0xdfeeff), new THREE.Color(0x5a7a3c)], H_NIGHT = [new THREE.Color(0x5a6f9e), new THREE.Color(0x1a2230)];
+  const H_SUNSET = new THREE.Color(0xffc49a);
+  function updateDayNight() {
+    const p = Math.max(0, Math.min(1, S.dist / TRIP_M));
+    const n = smooth01(0.16, 0.55, p);
+    const ss = smooth01(0.02, 0.22, p) * (1 - smooth01(0.38, 0.56, p));
+    const k = smooth01(0.22, 0.5, p);
+    // Cielo.
+    const u = sky.material.uniforms;
+    u.uMix.value = n;
+    u.uSunset.value = ss;
+    u.uDim.value = 1 - 0.55 * smooth01(0.1, 0.5, p);
+    const elev = (18 - 22 * smooth01(0, 0.42, p)) * Math.PI / 180;      // el sol baja de 18° a -4°
+    SUN_DIR.copy(SUN_AZ).multiplyScalar(Math.cos(elev)).setY(Math.sin(elev));
+    u.uSunDir.value.copy(SUN_DIR);
+    // Luz principal: sol (cada vez más bajo y naranja) y, pasada la mitad de la noche, la luna.
+    if (n < 0.5) {
+      sun.color.copy(C_SUN).lerp(C_SUNSET, Math.min(1, ss * 1.4));
+      sun.intensity = 2.6 * (1 - 2 * n);
+      if (SUN_DIR.y < 0.05) SUN_DIR.setY(0.05).normalize();             // la sombra no se va al infinito
+    } else {
+      SUN_DIR.copy(Ambiente.MOON_DIR);
+      sun.color.copy(C_MOON);
+      sun.intensity = 1.2 * (2 * n - 1);
+    }
+    // Luz de cielo, niebla, exposición y reflejos.
+    hemiBase = hemiLevel * (1 + (hemiNight - 1) * n);
+    hemi.color.copy(H_DAY[0]).lerp(H_SUNSET, ss * 0.5).lerp(H_NIGHT[0], n);
+    hemi.groundColor.copy(H_DAY[1]).lerp(H_NIGHT[1], n);
+    fogCol.copy(FOG_DAY).lerp(FOG_SUNSET, ss).lerp(FOG_NIGHT, n);
+    renderer.toneMappingExposure = 1 + 0.3 * n;
+    const env = noEnv ? null : (n < 0.5 ? envs.day || envs.night : envs.night);
+    if (scene.environment !== env) scene.environment = env;
+    // Luces: se prenden al atardecer (solo cuando cambian, para no tocar materiales cada cuadro).
+    if (Math.abs(k - dayNight.k) > 0.01 || dayNight.n < 0) {
+      Ambiente.setNightLights(k);
+      Models3D.setNight(k);
+      headPool.material.opacity = k;
+      headPool.visible = k > 0.02;
+      dayNight.k = k;
+    }
+    dayNight.n = n;
+    dayNight.ss = ss;
+  }
 
   function finish(arrived, reason) {
     if (mode !== 'play') return;          // una sola vez por viaje (varias penalidades en el mismo cuadro)

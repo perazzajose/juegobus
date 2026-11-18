@@ -152,7 +152,7 @@ const Models3D = (() => {
   // La textura tiene 4 × 4 ventanas (256 px, potencia de 2: repite bien también en WebGL 1).
   // De noche, `lit` marca qué ventanas tienen la luz prendida (mapa de emisión, cálido y variado).
   const CELLS = 4;
-  let facadeTex = null, litTex = null;
+  let facadeTex = null, litTex = null, buildingMat = null;
   function windowTexture(lit) {
     const c = document.createElement('canvas');
     c.width = c.height = 64 * CELLS;
@@ -243,8 +243,9 @@ const Models3D = (() => {
     litTex = litTex || windowTexture(true);
     const mat = new THREE.MeshStandardMaterial({
       map: facadeTex, vertexColors: true, roughness: 0.9, metalness: 0,
-      emissive: 0xffffff, emissiveMap: litTex, emissiveIntensity: 1.4      // ventanas con luz (es de noche)
+      emissive: 0xffffff, emissiveMap: litTex, emissiveIntensity: 1.4      // ventanas con luz (de noche)
     });
+    buildingMat = mat;
     const add = (key, fn) => {
       const B = geoBuilder();
       fn(B);
@@ -358,5 +359,8 @@ const Models3D = (() => {
     return g;
   }
 
-  return { load, has, parts: (k) => parts[k], size: (k) => sizes[k], instance, car, letters, hasLetters, get ready() { return ready; } };
+  // Ventanas encendidas según la hora (0 de día, 1 de noche).
+  const setNight = (k) => { if (buildingMat) buildingMat.emissiveIntensity = 1.4 * k; };
+
+  return { load, has, setNight, parts: (k) => parts[k], size: (k) => sizes[k], instance, car, letters, hasLetters, get ready() { return ready; } };
 })();

@@ -1,4 +1,4 @@
-// Ambiente del viaje: la noche (cielo con estrellas y luna, luces de autos y faroles) y los eventos
+// Ambiente del viaje: de la tarde a la noche (cielo, luces de autos y faroles) y los eventos
 // del camino (lluvia, niebla e incendios de campo a lo lejos). Todo pensado para celulares de gama
 // media: texturas chicas hechas con canvas, un solo dibujo por efecto y nada de luces reales extra
 // (las luces son "manchas" que suman brillo: aditivas).
@@ -355,10 +355,63 @@ const Ambiente = (() => {
       const m = zoneMats[k];
       m.wall.map.offset.y = -t * 0.35;
       const p = 0.5 + 0.5 * Math.sin(t * 3);
-      m.wall.opacity = 0.42 + 0.16 * p;
-      m.floor.opacity = 0.5 + 0.15 * p;
+      m.wall.opacity = Math.min(1, (0.42 + 0.16 * p) * zoneBoost);
+      m.floor.opacity = Math.min(1, (0.5 + 0.15 * p) * zoneBoost);
     }
   }
 
-  return { MOON_DIR, GLOW, POOL_MAT, LAMP_MAT, nightSky, headlightPool, carLights, makeFire, makeRain, additive, zoneGlow, updateZones };
+  // ---------- Cielo que pasa de la tarde a la noche ----------
+  // Una esfera alrededor de la cámara (sin niebla, se dibuja primero) que mezcla la foto del cielo de día
+  // (teñida de atardecer) con el cielo de noche, más el sol bajo. Uniforms: uNight (0 día, 1 noche),
+  // uSunset (cuánto tiñe de naranja), uSunDir (dirección del sol en el espacio de la esfera).
+  function makeSky(dayTex, nightTex) {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uDay: { value: dayTex }, uNight: { value: nightTex }, uMix: { value: 0 }, uSunset: { value: 0 },
+        uSunDir: { value: new THREE.Vector3(0, 0.3, 1).normalize() }, uSunCol: { value: new THREE.Color(0xffb070) },
+        uDim: { value: 1 }
+      },
+      vertexShader: `varying vec3 vDir;
+        void main() {
+          vDir = position;
+          vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          gl_Position = p.xyww;                       // siempre al fondo
+        }`,
+      fragmentShader: `uniform sampler2D uDay; uniform sampler2D uNight; uniform float uMix; uniform float uSunset;
+        uniform vec3 uSunDir; uniform vec3 uSunCol; uniform float uDim; varying vec3 vDir;
+        void main() {
+          vec3 d = normalize(vDir);
+          vec2 uv = vec2(atan(d.z, d.x) * 0.1591549 + 0.5, asin(clamp(d.y, -1.0, 1.0)) * 0.3183099 + 0.5);
+          vec3 day = texture2D(uDay, uv).rgb;
+          // Atardecer: el cielo se apaga y se pone naranja, más cerca del horizonte.
+          float hz = 1.0 - smoothstep(-0.05, 0.55, d.y);
+          vec3 tint = mix(vec3(1.0), vec3(1.25, 0.62, 0.38), uSunset * (0.35 + 0.65 * hz));
+          day = day * tint * uDim;
+          float s = max(dot(d, normalize(uSunDir)), 0.0);
+          day += uSunCol * (pow(s, 900.0) * 6.0 + pow(s, 14.0) * 0.45 * (0.4 + uSunset));
+          vec3 night = texture2D(uNight, uv).rgb;
+          gl_FragColor = vec4(mix(day, night, uMix), 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+      side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false
+    });
+    const m = new THREE.Mesh(new THREE.SphereGeometry(300, 32, 16), mat);
+    m.frustumCulled = false;
+    m.renderOrder = -1000;
+    return m;
+  }
+
+  // Luces de noche (faros, faroles, ventanas): se prenden con el atardecer. k: 0 apagadas, 1 prendidas.
+  // Las zonas de parada y bombas brillan más de día (si no, no se ven sobre el asfalto claro).
+  let lightsK = 1, zoneBoost = 1;
+  function setNightLights(k) {
+    lightsK = k;
+    zoneBoost = 1 + 0.9 * (1 - k);
+    POOL_MAT.opacity = k;
+    LAMP_MAT.opacity = k;
+    CAR_LIGHT_MAT.opacity = 0.35 + 0.65 * k;
+  }
+
+  return { MOON_DIR, GLOW, makeSky, setNightLights, get lightsK() { return lightsK; }, POOL_MAT, LAMP_MAT, nightSky, headlightPool, carLights, makeFire, makeRain, additive, zoneGlow, updateZones };
 })();
