@@ -1916,6 +1916,8 @@
   // se acomoda solo en el carril más cercano (así es fácil quedar justo en la parada).
   const CONTROL_KEY = 'cot-ruta-3d-control';
   const TILT_DEAD = 4, TILT_FULL = 24;     // grados: zona muerta y giro máximo
+  const TILT_HYST = 1.5;                   // grados: para salir de la zona muerta hay que pasarla por esto
+  const TILT_SMOOTH = 0.12;                // s: suavizado del sensor (saca el temblor de la mano)
   let control = 'buttons', controlChosen = false, afterControl = null;
   try { if (localStorage.getItem(CONTROL_KEY) === 'tilt') control = 'tilt'; } catch (e) { /* se usan botones */ }
   const tilt = { raw: null, zero: 0, sign: 0, seen: 0, idle: 0, calib: false, shown: 999, listening: false };
@@ -1929,14 +1931,26 @@
     const a = (so * Math.PI) / 180;
     let X = g.x * Math.cos(a) - g.y * Math.sin(a);
     let Y = g.x * Math.sin(a) + g.y * Math.cos(a);
-    // Algunos celulares dan la gravedad con el signo al revés: se detecta con el celular derecho.
+    let Z = g.z || 0;
+    // Algunos celulares dan la gravedad con el signo al revés: se detecta con el celular derecho
+    // (o, si está muy acostado, con la pantalla hacia arriba).
     if (!tilt.sign && Math.abs(Y) > 4) tilt.sign = Y < 0 ? -1 : 1;
+    else if (!tilt.sign && Math.abs(Z) > 4) tilt.sign = Z < 0 ? -1 : 1;
     if (!tilt.sign) return;
     X *= tilt.sign;
     Y *= tilt.sign;
-    if (Math.hypot(X, Y) < 2.5) return;      // casi acostado sobre la mesa: no se sabe el giro
-    const deg = (Math.atan2(-X, Y) * 180) / Math.PI;
-    tilt.raw = tilt.raw === null ? deg : tilt.raw + (deg - tilt.raw) * 0.35;
+    Z *= tilt.sign;
+    // Giro tipo volante, sin importar cuánto esté echado hacia atrás el celular. Antes era
+    // atan2(-X, Y): con el celular en vertical pero inclinado hacia atrás (como se lo mira), Y es
+    // chico y cualquier temblor de la mano se multiplicaba (el ómnibus temblaba y se pasaba de carril).
+    const back = Math.hypot(Y, Z);
+    if (Math.hypot(X, back) < 5) return;     // dato raro (golpe, sacudón)
+    const deg = (Math.atan2(-X, back) * 180) / Math.PI;
+    // Filtro por tiempo (no por cantidad de eventos: cada celular manda a otra frecuencia).
+    const now = performance.now();
+    const dt = tilt.t ? Math.min(0.1, (now - tilt.t) / 1000) : 0.016;
+    tilt.t = now;
+    tilt.raw = tilt.raw === null ? deg : tilt.raw + (deg - tilt.raw) * (1 - Math.exp(-dt / TILT_SMOOTH));
   }
 
   const nearestLane = (x) => busLanes().reduce((b, l) => (Math.abs(l - x) < Math.abs(b - x) ? l : b), LANE_X[0]);
@@ -1945,11 +1959,17 @@
     if (tilt.raw === null) return;
     if (tilt.calib) { tilt.zero = Math.max(-30, Math.min(30, tilt.raw)); tilt.calib = false; }
     const a = tilt.raw - tilt.zero, m = Math.abs(a);
-    if (m > TILT_DEAD) {
+    // Zona muerta con histéresis: entra a girar pasando DEAD + HYST y deja de girar bajo DEAD.
+    // Así, con el celular cerca del borde, no alterna entre "girar" y "volver al carril".
+    tilt.steering = m > TILT_DEAD + (tilt.steering ? 0 : TILT_HYST);
+    if (tilt.steering) {
       const v = Math.sign(a) * Math.min(1, (m - TILT_DEAD) / (TILT_FULL - TILT_DEAD));
-      S.targetX = clampX(S.busX + v * 1.6);
+      // El objetivo avanza de a poco hacia el costado (no se recalcula desde la posición del
+      // ómnibus en cada cuadro, que hacía que el ruido del sensor llegara directo al volante).
+      const base = Math.abs(S.targetX - S.busX) > 2 ? S.busX : S.targetX;
+      S.targetX = clampX(base + v * 4.5 * dt);
       tilt.idle = 0;
-    } else if ((tilt.idle += dt) > 0.2) {
+    } else if ((tilt.idle += dt) > 0.25) {
       S.targetX = nearestLane(S.busX + S.latV * 0.3);
     }
     // El volante dibujado gira como el celular.

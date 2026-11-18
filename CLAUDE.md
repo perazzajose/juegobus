@@ -99,7 +99,8 @@ py tools/agregar_altura.py data/ruta-mvd-chuy.json
 
 - Es responsive (media queries en `index.html` para pantallas angostas y para poca altura). Al entrar en un dispositivo táctil se abre `#controlBox`: **botones** o **inclinación**. La elección queda en `localStorage` (`cot-ruta-3d-control`) y se cambia con el botón CONTROLES del título.
 - La inclinación usa `devicemotion` (`accelerationIncludingGravity`), no `deviceorientation`, porque los ángulos se traban con el celular parado. La gravedad se pasa al plano de la pantalla según `screen.orientation.angle`, y el signo invertido de algunos celulares se detecta solo. El volante se centra al salir.
-  - Inclinado mueve `S.targetX` de a poco; derecho, se acomoda en el carril más cercano (`updateTilt` en `game3d.js`).
+  - Inclinado mueve `S.targetX` de a poco (a `v * 4.5` m/s, sin recalcular desde `S.busX` cada cuadro); derecho, se acomoda en el carril más cercano (`updateTilt` en `game3d.js`).
+  - **Temblor en vertical (arreglado 18/11/2026):** el giro se calcula como `atan2(-X, hypot(Y, Z))`, que no depende de cuánto esté echado hacia atrás el celular (antes `atan2(-X, Y)` multiplicaba el temblor de la mano con el celular en vertical e inclinado). Filtro por tiempo (`TILT_SMOOTH`) y zona muerta con histéresis (`TILT_HYST`). Probado con sensor simulado (temblor + ruido) a 20°, 55°, 65° y 75° de inclinación: sin temblor y misma respuesta en todos.
   - En iPhone se pide `DeviceMotionEvent.requestPermission()` al tocar el botón. Hace falta https.
 - En el celular: pantalla completa al salir, botón de pausa `#bPause`, pausa automática en `visibilitychange`.
 
