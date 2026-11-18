@@ -102,9 +102,12 @@ const Ambiente = (() => {
       g.fillRect(0, 0, w, h);
       // Cono que se abre hacia adelante (arriba en la textura) y se apaga a lo lejos.
       for (let y = 0; y < h; y++) {
-        const t = 1 - y / h;                        // 0 cerca, 1 lejos
-        const half = (0.25 + 0.75 * t) * w / 2;
-        const a = Math.pow(1 - t, 0.8) * Math.min(1, (y + 6) / 26) * 0.85 + 0.12 * (1 - t);
+        // y = 0 es la fila de abajo de la textura, que queda pegada al ómnibus.
+        const t = y / h;                            // 0 cerca, 1 lejos
+        const half = (0.3 + 0.7 * Math.sqrt(t)) * w / 2;
+        // Entra suave delante del ómnibus, es fuerte a unos metros y se apaga de a poco a lo lejos
+        // (sin borde: en la última fila ya vale 0).
+        const a = Math.min(1, (y + 4) / 22) * Math.pow(1 - t, 1.1);
         const grad = g.createLinearGradient(w / 2 - half, 0, w / 2 + half, 0);
         grad.addColorStop(0, 'rgba(255,240,210,0)');
         grad.addColorStop(0.5, `rgba(255,240,210,${a})`);
@@ -117,7 +120,7 @@ const Ambiente = (() => {
     const geo = new THREE.PlaneGeometry(10, 50, 1, 10).rotateX(-Math.PI / 2);
     geo.translate(0, 0.06, -31);
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-      map: tex, color: 0x8a8070, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false
+      map: tex, color: 0xc8bca2, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false
     }));
     m.renderOrder = 3;
     m.frustumCulled = false;
