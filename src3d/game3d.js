@@ -1,4 +1,4 @@
-// Ruta a la Costa 3D: misma jugabilidad que la versión 2D, con cámara detrás del ómnibus.
+// BUSGAME: misma jugabilidad que la versión 2D, con cámara detrás del ómnibus.
 // Unidades en metros. El ómnibus queda en z = 0 y el mundo se mueve hacia +Z.
 (() => {
   const { LANE_X } = World3D;

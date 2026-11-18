@@ -1,4 +1,6 @@
-# COT · Ruta a la Costa — contexto para Claude Code
+# BUSGAME — contexto para Claude Code
+
+El juego se llama **BUSGAME** (antes "COT · Ruta a la Costa"; José lo renombró el 18/11/2026). Las claves de `localStorage` siguen con el nombre viejo (`cot-ruta-3d-*`) para no perder rankings ni preferencias.
 
 Juego de manejo de ómnibus de COT para navegador, en 3D: `index.html`, three.js r162 en `lib/three.bundle.min.js`, código en `src3d/`. (La versión 2D se sacó; de `src/` el juego solo usa `sound.js` y `ranking.js`.) Publicado en GitHub Pages: https://perazzajose.github.io/juegobus/
 

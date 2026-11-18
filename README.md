@@ -1,4 +1,4 @@
-# Juego Bus · COT Ruta a la Costa
+# BUSGAME
 
 Juego arcade para navegador. Manejás un ómnibus de COT de Montevideo al Chuy (línea 152I, por la Interbalnearia y Ruta 9), levantás pasajeros en las paradas y llegás en hora sin chocar.
 
