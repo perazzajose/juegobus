@@ -887,7 +887,7 @@ const World3D = (() => {
         c.fillStyle = '#ffffff'; c.font = 'bold 22px Arial';
         c.fillText('GASOIL', W / 2, 92);
         c.font = 'bold 34px Arial'; c.fillStyle = '#f2b705';
-        c.fillText('$ 20', W / 2, 136);
+        c.fillText('$ 60', W / 2, 136);
         c.font = '16px Arial'; c.fillStyle = '#ffffff';
         c.fillText('el %', W / 2, 160);
       }), roughness: 0.5, emissive: 0xffffff, emissiveIntensity: 0.5

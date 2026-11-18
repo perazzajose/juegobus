@@ -18,15 +18,40 @@
   const TARGET_TIME = 540;              // el viaje completo dura unos 9 minutos
   // Plata y gasoil: los pasajes y las encomiendas dan plata; el gasoil se gasta andando y se carga
   // (pagando) en las estaciones de servicio. Sin gasoil, el viaje se termina.
-  const PASAJE = 180, ENCOMIENDA = 120;  // $ por pasajero y por encomienda
-  const START_MONEY = 600;
+  // Tarifas oficiales de COT a Chuy (cartel de la agencia Chuy, 18/11/2026; incluyen $10 de tasa de
+  // embarque). El viaje va hacia Chuy, así que cada pasajero paga el pasaje desde su parada hasta Chuy.
+  // Entre dos lugares de la lista, el precio se interpola por km (paradas "km 120", etc.).
+  const TARIFAS = [
+    { km: 0, name: 'Montevideo', precio: 1147 },
+    { km: 94.5, name: 'Pan de Azúcar', precio: 812 },
+    { km: 135.5, name: 'San Carlos', precio: 679 },
+    { km: 203.8, name: 'Rocha', precio: 478 },
+    { km: 260.3, name: 'Castillos', precio: 244 },
+    { km: 298, name: 'Punta del Diablo', precio: 177 },
+    { km: 304, name: 'Fortaleza', precio: 110 },
+    { km: 314, name: 'La Coronilla', precio: 110 }
+  ];
+  function pasaje(km) {
+    const T = TARIFAS;
+    if (km <= T[0].km) return T[0].precio;
+    for (let i = 1; i < T.length; i++) {
+      if (km <= T[i].km) {
+        const a = T[i - 1], b = T[i];
+        return Math.round(a.precio + (b.precio - a.precio) * (km - a.km) / (b.km - a.km));
+      }
+    }
+    return T[T.length - 1].precio;
+  }
+  const ENCOMIENDA = 220;               // $ por encomienda (precio fijo)
+  const START_MONEY = 1500;            // caja al salir de Tres Cruces
   const START_FUEL = 70;                // % del tanque al salir de Tres Cruces
   const FUEL_PER_M = 100 / 5200;        // un tanque lleno alcanza para un tercio del viaje (~5 estaciones)
   const FUEL_IDLE = 0.05;               // % por segundo con el motor en marcha (aunque esté parado)
-  const FUEL_PRICE = 20;                // $ por cada % del tanque (también en el cartel de la estación)
+  const FUEL_PRICE = 60;                // $ por cada % del tanque (también en el cartel de la estación). Provisorio:
+                                        // con las tarifas reales un viaje junta ~$ 44.000 y gasta ~300 % de tanque
   const FUEL_RATE = 22;                 // % por segundo que carga la bomba
   // Arreglos: cada choque cuesta plata según contra qué fue (si no alcanza, se lleva lo que haya).
-  const REPAIR = { car: 400, truck: 700, moto: 250, isleta: 500 };
+  const REPAIR = { car: 2500, truck: 4000, moto: 1500, isleta: 3000 };   // provisorio
   const SPAWN_AHEAD = 280;
   // Ruta 9 (un carril por mano): los que van en nuestro sentido van más lento y los de frente
   // aparecen más lejos, porque se acercan rápido.
@@ -195,7 +220,7 @@
       stops: R.stops.map((st) => {
         const km = typeof st === 'number' ? st : st.km;
         const name = typeof st === 'number' ? `Parada km ${kmText(km)}` : `Parada ${st.name}`;
-        return { km, name, pos: posAt(km), spawned: false, done: false, missed: false };
+        return { km, name, fare: pasaje(km), pos: posAt(km), spawned: false, done: false, missed: false };
       }),
       nextCarAt: attract ? 40 : 60, nextOncomingAt: 30, nextPickupAt: 150, nextKmSign: Math.floor(R.from / 10) * 10 + 10,
       terminal: false, autoTimer: 2,
@@ -1241,7 +1266,7 @@
     s.done = true;
     S.passengers += s.waiting;
     S.score += s.waiting * 100;
-    S.money += s.waiting * PASAJE;
+    S.money += s.waiting * s.fare;
     Sfx.board();
     s.people.forEach((p, i) => {
       const i0 = world.indexOf(p);
@@ -1250,7 +1275,7 @@
         animate(p, new THREE.Vector3(S.busX + 1.4, 0.3, -4.5), 0.45, () => scene.remove(p));
       }, i * 110);
     });
-    popup(`+${s.waiting} pasajeros  (+$${money(s.waiting * PASAJE)})`, '#9be37a');
+    popup(`+${s.waiting} pasajeros a $${money(s.fare)}  (+$${money(s.waiting * s.fare)})`, '#9be37a');
     drawProgress();
   }
 
@@ -1539,7 +1564,7 @@
         const inZone = next.zone && Math.abs(next.zone.position.z) < 14;
         if (inZone && Math.abs(S.busX - LANE_X[RIGHT]) >= 0.5) msg = '¡CARRIL DERECHO! ▶';
         else if (inZone && S.speed > STOP_SPEED) msg = '¡FRENÁ!  (20 km/h o menos)';
-        else msg = `${next.name} en ${realM(d)} m`;
+        else msg = `${next.name} en ${realM(d)} m · pasaje $${money(next.fare)}`;
       }
     }
     if (hudCache.banner !== msg) {
